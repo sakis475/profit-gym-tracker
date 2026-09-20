@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import PullToRefresh from 'react-simple-pull-to-refresh'
 import { getExercises, getExerciseCategories, createExercise, updateExercise, deleteExercise } from '../services/exercises'
 import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
 import {
@@ -15,8 +16,11 @@ import {
     DialogActions,
     TextField,
     IconButton,
+    CircularProgress,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
 
 export default function ExercisesList() {
     const [items, setItems] = useState<ExerciseRow[] | null>(null)
@@ -30,6 +34,9 @@ export default function ExercisesList() {
     const [editing, setEditing] = useState<ExerciseRow | null>(null)
     const [deleting, setDeleting] = useState<ExerciseRow | null>(null)
     const [deleteBusy, setDeleteBusy] = useState(false)
+    const theme = useTheme()
+    // Swipe-to-refresh on small screens only; bigger screens use the Refresh button
+    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'))
 
     async function load() {
         setLoading(true)
@@ -95,48 +102,66 @@ export default function ExercisesList() {
         load()
     }
 
+    const spinner = (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} />
+        </Box>
+    )
+
     return (
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
+                <Button
+                    variant="outlined"
+                    startIcon={<RefreshIcon />}
+                    onClick={load}
+                    disabled={loading}
+                    sx={{ display: { xs: 'none', md: 'inline-flex' } }}
+                >
+                    Refresh
+                </Button>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add exercise
                 </Button>
             </Box>
 
-            <Box>
-                {loading ? (
-                    <Typography>Loading...</Typography>
-                ) : (
-                    <List>
-                        {items && items.length > 0 ? (
-                            items.map((it) => (
-                                <ListItem
-                                    key={it.id}
-                                    secondaryAction={
-                                        <>
-                                            <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
-                                                <EditIcon />
-                                            </IconButton>
-                                            <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
-                                                <DeleteIcon />
-                                            </IconButton>
-                                        </>
-                                    }
-                                >
-                                    <ListItemText primary={it.name} secondary={it.category} />
-                                </ListItem>
-                            ))
-                        ) : (
-                            <Typography>No exercises found.</Typography>
-                        )}
-                    </List>
-                )}
-
-                <Box sx={{ mt: 2 }}>
-                    <Button variant="outlined" onClick={load}>Refresh</Button>
+            <PullToRefresh
+                onRefresh={load}
+                isPullable={isSmallScreen}
+                pullingContent={spinner}
+                refreshingContent={spinner}
+            >
+                <Box sx={{ minHeight: '60vh' }}>
+                    {loading && !items ? (
+                        <Typography>Loading...</Typography>
+                    ) : (
+                        <List>
+                            {items && items.length > 0 ? (
+                                items.map((it) => (
+                                    <ListItem
+                                        key={it.id}
+                                        secondaryAction={
+                                            <>
+                                                <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
+                                                    <EditIcon />
+                                                </IconButton>
+                                                <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
+                                                    <DeleteIcon />
+                                                </IconButton>
+                                            </>
+                                        }
+                                    >
+                                        <ListItemText primary={it.name} secondary={it.category} />
+                                    </ListItem>
+                                ))
+                            ) : (
+                                <Typography>No exercises found.</Typography>
+                            )}
+                        </List>
+                    )}
                 </Box>
-            </Box>
+            </PullToRefresh>
 
             <Dialog open={modalOpen} onClose={closeModal}>
                 <DialogTitle>{editing ? 'Edit exercise' : 'Create exercise'}</DialogTitle>
