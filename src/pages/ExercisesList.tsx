@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { getExercises, createExercise } from '../services/exercises'
+import { getExercises, getExerciseCategories, createExercise } from '../services/exercises'
 import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
 import {
+    Autocomplete,
     Typography,
     Button,
     Box,
@@ -22,6 +23,8 @@ export default function ExercisesList() {
     const [modalOpen, setModalOpen] = useState(false)
     const [creating, setCreating] = useState(false)
     const [name, setName] = useState('')
+    const [category, setCategory] = useState('')
+    const [categories, setCategories] = useState<string[]>([])
     const [error, setError] = useState<string | null>(null)
 
     async function load() {
@@ -35,6 +38,11 @@ export default function ExercisesList() {
         load()
     }, [])
 
+    async function openModal() {
+        setModalOpen(true)
+        setCategories((await getExerciseCategories()) ?? [])
+    }
+
     async function handleCreate(e?: React.FormEvent) {
         e?.preventDefault()
         setError(null)
@@ -43,7 +51,10 @@ export default function ExercisesList() {
             return
         }
         setCreating(true)
-        const payload: Partial<ExerciseInsert> = { name: name.trim() }
+        const payload: Partial<ExerciseInsert> = {
+            name: name.trim(),
+            category: category.trim() || null,
+        }
         const res = await createExercise(payload as ExerciseInsert)
         setCreating(false)
         if (!res) {
@@ -51,6 +62,7 @@ export default function ExercisesList() {
             return
         }
         setName('')
+        setCategory('')
         setModalOpen(false)
         load()
     }
@@ -59,7 +71,7 @@ export default function ExercisesList() {
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModalOpen(true)}>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={openModal}>
                     Add exercise
                 </Button>
             </Box>
@@ -96,8 +108,16 @@ export default function ExercisesList() {
                             onChange={(e) => setName(e.target.value)}
                             fullWidth
                             required
+                            sx={{ mt: 1, mb: 2 }}
                         />
-                        {error && <Typography color="error">{error}</Typography>}
+                        <Autocomplete
+                            freeSolo
+                            options={categories}
+                            inputValue={category}
+                            onInputChange={(_, value) => setCategory(value)}
+                            renderInput={(params) => <TextField {...params} label="Category" />}
+                        />
+                        {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={() => setModalOpen(false)} disabled={creating}>Cancel</Button>

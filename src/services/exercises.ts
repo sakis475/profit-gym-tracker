@@ -17,6 +17,27 @@ export async function getExercises(): Promise<ExerciseRow[] | null> {
   return data
 }
 
+export async function getExerciseCategories(): Promise<string[] | null> {
+  const { data, error } = await supabase
+    .from('exercises')
+    .select('category')
+    .is('disabledAt', null)
+    .not('category', 'is', null)
+
+  if (error) {
+    console.error('Read exercise categories error:', error)
+    return null
+  }
+
+  const categories = new Set<string>()
+  for (const { category } of data) {
+    const trimmed = category?.trim()
+    if (trimmed) categories.add(trimmed)
+  }
+
+  return [...categories].sort((a, b) => a.localeCompare(b))
+}
+
 export async function createExercise(
   exercise: ExerciseInsert
 ): Promise<ExerciseRow | null> {

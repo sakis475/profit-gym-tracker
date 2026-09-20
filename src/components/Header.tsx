@@ -1,5 +1,5 @@
 import { Link as RouterLink, useLocation } from 'react-router-dom'
-import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material'
+import { AppBar, Toolbar, Button, Box } from '@mui/material'
 import type { User } from '@supabase/supabase-js'
 
 type Props = {
