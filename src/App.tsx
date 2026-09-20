@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import ExercisesList from './pages/ExercisesList'
 import Workout from './pages/Workout'
+import Header from './components/Header'
 import { CssBaseline, Container } from '@mui/material'
 
 function App() {
@@ -39,11 +40,12 @@ function App() {
     <>
       <CssBaseline />
       <BrowserRouter>
-        <Container maxWidth="lg">
+        <Header user={user} onSignOut={handleSignOut} />
+        <Container maxWidth="lg" sx={{ mt: 3 }}>
           <Routes>
             <Route
               path="/"
-              element={user ? <ExercisesList onSignOut={handleSignOut} /> : <Login onSuccess={setUser} />}
+              element={user ? <ExercisesList /> : <Login onSuccess={setUser} />}
             />
             <Route
               path="/workout"

@@ -1,9 +1,5 @@
-import { Container, Typography } from '@mui/material'
+import { Typography } from '@mui/material'
 
 export default function Workout() {
-    return (
-        <Container sx={{ mt: 4 }}>
-            <Typography variant="h4">workout</Typography>
-        </Container>
-    )
+    return <Typography variant="h4">workout</Typography>
 }

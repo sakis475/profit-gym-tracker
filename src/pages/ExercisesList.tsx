@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { getExercises, createExercise } from '../services/exercises'
 import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
 import {
-    AppBar,
-    Toolbar,
     Typography,
     Button,
     Box,
@@ -16,16 +13,10 @@ import {
     DialogContent,
     DialogActions,
     TextField,
-    IconButton,
-    Container,
 } from '@mui/material'
 import { Add as AddIcon } from '@mui/icons-material'
 
-// debug: inspect imported components to diagnose invalid element type
-console.log('MUI AppBar import:', typeof AppBar, AppBar)
-console.log('MUI Button import:', typeof Button, Button)
-console.log('AddIcon import:', typeof AddIcon, AddIcon)
-export default function ExercisesList({ onSignOut }: { onSignOut: () => void }) {
+export default function ExercisesList() {
     const [items, setItems] = useState<ExerciseRow[] | null>(null)
     const [loading, setLoading] = useState(false)
     const [modalOpen, setModalOpen] = useState(false)
@@ -66,18 +57,14 @@ export default function ExercisesList({ onSignOut }: { onSignOut: () => void }) 
 
     return (
         <>
-            <AppBar position="static">
-                <Toolbar>
-                    <Typography variant="h6" sx={{ flexGrow: 1 }}>Exercises</Typography>
-                    <Button color="inherit" component={Link} to="/workout">Workout</Button>
-                    <IconButton color="inherit" onClick={() => setModalOpen(true)} aria-label="add">
-                        <AddIcon />
-                    </IconButton>
-                    <Button color="inherit" onClick={onSignOut}>Sign out</Button>
-                </Toolbar>
-            </AppBar>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setModalOpen(true)}>
+                    Add exercise
+                </Button>
+            </Box>
 
-            <Container sx={{ mt: 3 }}>
+            <Box>
                 {loading ? (
                     <Typography>Loading...</Typography>
                 ) : (
@@ -97,7 +84,7 @@ export default function ExercisesList({ onSignOut }: { onSignOut: () => void }) 
                 <Box sx={{ mt: 2 }}>
                     <Button variant="outlined" onClick={load}>Refresh</Button>
                 </Box>
-            </Container>
+            </Box>
 
             <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
                 <DialogTitle>Create exercise</DialogTitle>
