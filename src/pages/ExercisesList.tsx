@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getExercises, getExerciseCategories, createExercise } from '../services/exercises'
+import { getExercises, getExerciseCategories, createExercise, updateExercise, deleteExercise } from '../services/exercises'
 import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
 import {
     Autocomplete,
@@ -14,8 +14,9 @@ import {
     DialogContent,
     DialogActions,
     TextField,
+    IconButton,
 } from '@mui/material'
-import { Add as AddIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
 
 export default function ExercisesList() {
     const [items, setItems] = useState<ExerciseRow[] | null>(null)
@@ -26,6 +27,9 @@ export default function ExercisesList() {
     const [category, setCategory] = useState('')
     const [categories, setCategories] = useState<string[]>([])
     const [error, setError] = useState<string | null>(null)
+    const [editing, setEditing] = useState<ExerciseRow | null>(null)
+    const [deleting, setDeleting] = useState<ExerciseRow | null>(null)
+    const [deleteBusy, setDeleteBusy] = useState(false)
 
     async function load() {
         setLoading(true)
@@ -38,12 +42,23 @@ export default function ExercisesList() {
         load()
     }, [])
 
-    async function openModal() {
+    async function openModal(exercise?: ExerciseRow) {
+        setEditing(exercise ?? null)
+        setName(exercise?.name ?? '')
+        setCategory(exercise?.category ?? '')
+        setError(null)
         setModalOpen(true)
         setCategories((await getExerciseCategories()) ?? [])
     }
 
-    async function handleCreate(e?: React.FormEvent) {
+    function closeModal() {
+        setModalOpen(false)
+        setEditing(null)
+        setName('')
+        setCategory('')
+    }
+
+    async function handleSubmit(e?: React.FormEvent) {
         e?.preventDefault()
         setError(null)
         if (!name.trim()) {
@@ -55,15 +70,28 @@ export default function ExercisesList() {
             name: name.trim(),
             category: category.trim() || null,
         }
-        const res = await createExercise(payload as ExerciseInsert)
+        const res = editing
+            ? await updateExercise(editing.id, payload)
+            : await createExercise(payload as ExerciseInsert)
         setCreating(false)
         if (!res) {
-            setError('Failed to create exercise')
+            setError(editing ? 'Failed to update exercise' : 'Failed to create exercise')
             return
         }
-        setName('')
-        setCategory('')
-        setModalOpen(false)
+        closeModal()
+        load()
+    }
+
+    async function handleDelete() {
+        if (!deleting) return
+        setDeleteBusy(true)
+        const res = await deleteExercise(deleting.id)
+        setDeleteBusy(false)
+        if (!res) {
+            setError('Failed to delete exercise')
+            return
+        }
+        setDeleting(null)
         load()
     }
 
@@ -71,7 +99,7 @@ export default function ExercisesList() {
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={openModal}>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add exercise
                 </Button>
             </Box>
@@ -83,8 +111,20 @@ export default function ExercisesList() {
                     <List>
                         {items && items.length > 0 ? (
                             items.map((it) => (
-                                <ListItem key={(it as any).id ?? (it as any).exerciseId ?? JSON.stringify(it)}>
-                                    <ListItemText primary={(it as any).name ?? (it as any).title ?? JSON.stringify(it)} />
+                                <ListItem
+                                    key={it.id}
+                                    secondaryAction={
+                                        <>
+                                            <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
+                                                <EditIcon />
+                                            </IconButton>
+                                            <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </>
+                                    }
+                                >
+                                    <ListItemText primary={it.name} secondary={it.category} />
                                 </ListItem>
                             ))
                         ) : (
@@ -98,9 +138,9 @@ export default function ExercisesList() {
                 </Box>
             </Box>
 
-            <Dialog open={modalOpen} onClose={() => setModalOpen(false)}>
-                <DialogTitle>Create exercise</DialogTitle>
-                <form onSubmit={handleCreate}>
+            <Dialog open={modalOpen} onClose={closeModal}>
+                <DialogTitle>{editing ? 'Edit exercise' : 'Create exercise'}</DialogTitle>
+                <form onSubmit={handleSubmit}>
                     <DialogContent>
                         <TextField
                             label="Name"
@@ -120,10 +160,26 @@ export default function ExercisesList() {
                         {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={() => setModalOpen(false)} disabled={creating}>Cancel</Button>
-                        <Button type="submit" variant="contained" disabled={creating}>{creating ? 'Creating…' : 'Create'}</Button>
+                        <Button onClick={closeModal} disabled={creating}>Cancel</Button>
+                        <Button type="submit" variant="contained" disabled={creating}>
+                            {editing ? (creating ? 'Saving…' : 'Save') : (creating ? 'Creating…' : 'Create')}
+                        </Button>
                     </DialogActions>
                 </form>
+            </Dialog>
+
+            <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
+                <DialogTitle>Delete exercise</DialogTitle>
+                <DialogContent>
+                    <Typography>Delete "{deleting?.name}"?</Typography>
+                    {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</Button>
+                    <Button color="error" variant="contained" onClick={handleDelete} disabled={deleteBusy}>
+                        {deleteBusy ? 'Deleting…' : 'Delete'}
+                    </Button>
+                </DialogActions>
             </Dialog>
         </>
     )
