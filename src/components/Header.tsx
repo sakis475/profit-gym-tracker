@@ -16,7 +16,7 @@ export default function Header({ user, onSignOut }: Props) {
     const { pathname } = useLocation()
 
     return (
-        <AppBar position="static">
+        <AppBar position="sticky">
             <Toolbar>
                 <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
                     {user && navLinks.map((link) => (
