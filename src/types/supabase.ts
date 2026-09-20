@@ -47,21 +47,27 @@ export type Database = {
       scheduler: {
         Row: {
           createdAt: string | null
-          day: string
+          day: number
+          disabledAt: string | null
           exerciseId: string
           id: string
+          user_id: string | null
         }
         Insert: {
           createdAt?: string | null
-          day: string
+          day: number
+          disabledAt?: string | null
           exerciseId: string
           id?: string
+          user_id?: string | null
         }
         Update: {
           createdAt?: string | null
-          day?: string
+          day?: number
+          disabledAt?: string | null
           exerciseId?: string
           id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

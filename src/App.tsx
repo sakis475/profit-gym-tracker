@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import ExercisesList from './pages/ExercisesList'
 import Workout from './pages/Workout'
+import Schedule from './pages/Schedule'
 import Header from './components/Header'
 import { CssBaseline, Container } from '@mui/material'
 
@@ -50,6 +51,10 @@ function App() {
             <Route
               path="/workout"
               element={user ? <Workout /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/schedule"
+              element={user ? <Schedule /> : <Navigate to="/" replace />}
             />
           </Routes>
         </Container>

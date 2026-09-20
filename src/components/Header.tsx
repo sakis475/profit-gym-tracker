@@ -10,6 +10,7 @@ type Props = {
 const navLinks = [
     { label: 'Exercises', to: '/' },
     { label: 'Workout', to: '/workout' },
+    { label: 'Schedule', to: '/schedule' },
 ]
 
 export default function Header({ user, onSignOut }: Props) {
