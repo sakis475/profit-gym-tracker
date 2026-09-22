@@ -10,3 +10,7 @@ export type ScheduleUpdate = Database['public']['Tables']['scheduler']['Update']
 export type ScheduleWithExercise = ScheduleRow & {
     exercises: Pick<ExerciseRow, 'name' | 'category'>
 }
+
+export type WorkoutRow = Database['public']['Tables']['workout']['Row']
+export type WorkoutInsert = Database['public']['Tables']['workout']['Insert']
+export type WorkoutUpdate = Database['public']['Tables']['workout']['Update']

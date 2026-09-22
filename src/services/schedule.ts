@@ -8,12 +8,16 @@ import type {
 
 
 // Entries whose exercise was deleted (disabled) are left out, hence the inner join
-export async function getSchedules(): Promise<ScheduleWithExercise[] | null> {
-  const { data, error } = await supabase
+export async function getSchedules(day?: number): Promise<ScheduleWithExercise[] | null> {
+  let query = supabase
     .from('scheduler')
     .select('*, exercises!inner(name, category)')
     .is('disabledAt', null)
     .is('exercises.disabledAt', null)
+
+  if (day !== undefined) query = query.eq('day', day)
+
+  const { data, error } = await query
     .order('day', { ascending: true })
     .order('createdAt', { ascending: true })
 

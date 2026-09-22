@@ -82,30 +82,36 @@ export type Database = {
       workout: {
         Row: {
           createdAt: string
+          disabledAt: string | null
           exerciseId: string
           id: string
           kg: number | null
           notes: string | null
           reps: number | null
-          sets: number | null
+          set: number | null
+          user_id: string | null
         }
         Insert: {
           createdAt: string
+          disabledAt?: string | null
           exerciseId: string
           id?: string
           kg?: number | null
           notes?: string | null
           reps?: number | null
-          sets?: number | null
+          set?: number | null
+          user_id?: string | null
         }
         Update: {
           createdAt?: string
+          disabledAt?: string | null
           exerciseId?: string
           id?: string
           kg?: number | null
           notes?: string | null
           reps?: number | null
-          sets?: number | null
+          set?: number | null
+          user_id?: string | null
         }
         Relationships: [
           {
