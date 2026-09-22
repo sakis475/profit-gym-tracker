@@ -46,10 +46,12 @@ const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 function SortableScheduleItem({
     item,
+    index,
     onEdit,
     onDelete,
 }: {
     item: ScheduleWithExercise
+    index: number
     onEdit: () => void
     onDelete: () => void
 }) {
@@ -74,14 +76,22 @@ function SortableScheduleItem({
                 </>
             }
         >
-            <IconButton
+            <Box
                 aria-label="Drag to reorder"
                 {...attributes}
                 {...listeners}
-                sx={{ cursor: 'grab', touchAction: 'none', mr: 1 }}
+                sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    mr: 2,
+                    color: 'text.secondary',
+                    cursor: 'grab',
+                    touchAction: 'none',
+                }}
             >
-                <DragIndicatorIcon />
-            </IconButton>
+                <DragIndicatorIcon fontSize="small" sx={{ mr: 0.5 }} />
+                <Typography sx={{ minWidth: 16 }}>{index + 1}.</Typography>
+            </Box>
             <ListItemText primary={item.exercises.name} secondary={item.exercises.category} />
         </ListItem>
     )
@@ -231,10 +241,11 @@ export default function Schedule() {
                         {dayItems.length > 0 ? (
                             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                 <SortableContext items={dayItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
-                                    {dayItems.map((it) => (
+                                    {dayItems.map((it, index) => (
                                         <SortableScheduleItem
                                             key={it.id}
                                             item={it}
+                                            index={index}
                                             onEdit={() => openModal(it)}
                                             onDelete={() => { setError(null); setDeleting(it) }}
                                         />
@@ -272,10 +283,8 @@ export default function Schedule() {
                             fullWidth
                             required
                             helperText={exercises.length === 0 ? 'Create an exercise first' : undefined}
-                            slotProps={{
-                                select: {
-                                    renderValue: (value) => exercises.find((ex) => ex.id === value)?.name ?? '',
-                                },
+                            SelectProps={{
+                                renderValue: (value) => exercises.find((ex) => ex.id === value)?.name ?? '',
                             }}
                         >
                             {exercises.map((ex) => (
