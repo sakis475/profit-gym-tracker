@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper } from '@mui/material'
+import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper, Divider } from '@mui/material'
+import { Google as GoogleIcon } from '@mui/icons-material'
 
 type Props = {
     onSuccess?: (user: any | null) => void
@@ -45,6 +46,22 @@ export default function Login({ onSuccess }: Props) {
         setError('Sign-up successful — please confirm your email before signing in.')
     }
 
+    async function handleGoogleSignIn() {
+        setError(null)
+        setLoading(true)
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin,
+            },
+        })
+        // On success the browser is redirected to Google, so this only runs on failure.
+        if (error) {
+            setError(error.message)
+            setLoading(false)
+        }
+    }
+
     return (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
             <Paper sx={{ p: 3, width: 420 }}>
@@ -78,6 +95,17 @@ export default function Login({ onSuccess }: Props) {
                         </Button>
                     </Box>
                 </form>
+                <Divider sx={{ my: 2 }}>or</Divider>
+                <Button
+                    type="button"
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<GoogleIcon />}
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                >
+                    Continue with Google
+                </Button>
             </Paper>
         </Box>
     )
