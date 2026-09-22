@@ -18,8 +18,8 @@ import { Add as AddIcon, Check as CheckIcon, Close as CloseIcon, Edit as EditIco
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-type SetFields = { reps: string; kg: string }
-const EMPTY_SET: SetFields = { reps: '', kg: '' }
+type SetFields = { reps: string; kg: string; notes: string }
+const EMPTY_SET: SetFields = { reps: '', kg: '', notes: '' }
 
 function startOfToday() {
     const d = new Date()
@@ -47,7 +47,7 @@ function setsToFields(sets: WorkoutRow[]): SetFields[] {
     const count = Math.max(1, ...sets.map((w) => w.set ?? 0))
     return Array.from({ length: count }, (_, i) => {
         const w = sets.find((s) => s.set === i + 1)
-        return w ? { reps: String(w.reps ?? ''), kg: String(w.kg ?? '') } : EMPTY_SET
+        return w ? { reps: String(w.reps ?? ''), kg: String(w.kg ?? ''), notes: w.notes ?? '' } : EMPTY_SET
     })
 }
 
@@ -139,8 +139,8 @@ export default function Workout() {
         setError(exerciseId, null)
 
         // The set number is the row position, empty rows are skipped
-        const rows: { set: number; reps: number | null; kg: number | null }[] = []
-        for (const [i, { reps, kg }] of draftSets(exerciseId).entries()) {
+        const rows: { set: number; reps: number | null; kg: number | null; notes: string | null }[] = []
+        for (const [i, { reps, kg, notes }] of draftSets(exerciseId).entries()) {
             if (!reps && !kg) continue
             const repsNum = reps ? Number(reps) : null
             const kgNum = kg ? Number(kg) : null
@@ -148,7 +148,7 @@ export default function Workout() {
                 setError(exerciseId, `Set ${i + 1}: reps must be a whole number, kg a positive number`)
                 return
             }
-            rows.push({ set: i + 1, reps: repsNum, kg: kgNum })
+            rows.push({ set: i + 1, reps: repsNum, kg: kgNum, notes: notes.trim() || null })
         }
         if (rows.length === 0) {
             setError(exerciseId, 'Enter reps or kg for at least one set')
@@ -249,9 +249,19 @@ export default function Workout() {
                                                                 step: field === 'kg' ? 0.5 : 1,
                                                                 inputMode: field === 'kg' ? 'decimal' : 'numeric',
                                                             }}
-                                                            sx={{ flex: 1, minWidth: 0 }}
+                                                            sx={{ width: { xs: 70, sm: 120 }, flexShrink: 0 }}
                                                         />
                                                     ))}
+                                                    <TextField
+                                                        size="small"
+                                                        label="Notes"
+                                                        value={row.notes}
+                                                        placeholder={prev?.notes ?? ''}
+                                                        onChange={(e) => setField(id, i, 'notes', e.target.value)}
+                                                        disabled={locked || saving === id}
+                                                        InputLabelProps={{ shrink: true }}
+                                                        sx={{ flex: 1, minWidth: 0 }}
+                                                    />
                                                     {!locked && (
                                                         <IconButton
                                                             aria-label={`Remove set ${i + 1}`}
@@ -280,7 +290,9 @@ export default function Workout() {
                                             <Button
                                                 key="add"
                                                 startIcon={<AddIcon />}
-                                                onClick={() => updateSets(id, (rows) => [...rows, EMPTY_SET])}
+                                                onClick={() =>
+                                                    updateSets(id, (rows) => [...rows, rows[rows.length - 1] ?? EMPTY_SET])
+                                                }
                                                 disabled={saving === id}
                                             >
                                                 Add set

@@ -100,7 +100,7 @@ export async function createWorkoutSets(
 export async function replaceWorkoutSets(
   exerciseId: string,
   createdAt: string,
-  sets: { set: number; reps: number | null; kg: number | null }[]
+  sets: { set: number; reps: number | null; kg: number | null; notes: string | null }[]
 ): Promise<WorkoutRow[] | null> {
   const current = await getWorkoutSets(exerciseId, createdAt)
   if (!current) return null
@@ -114,14 +114,14 @@ export async function replaceWorkoutSets(
   const currentBySet = new Map(current.map((w) => [w.set, w]))
   const wanted = new Set<number | null>(sets.map((s) => s.set))
 
-  const updates: { id: string; reps: number | null; kg: number | null }[] = []
+  const updates: { id: string; reps: number | null; kg: number | null; notes: string | null }[] = []
   const inserts: WorkoutInsert[] = []
-  for (const { set, reps, kg } of sets) {
+  for (const { set, reps, kg, notes } of sets) {
     const existing = currentBySet.get(set)
     if (!existing) {
-      inserts.push({ exerciseId, createdAt, set, reps, kg, user_id: userData?.user?.id })
-    } else if (existing.reps !== reps || existing.kg !== kg) {
-      updates.push({ id: existing.id, reps, kg })
+      inserts.push({ exerciseId, createdAt, set, reps, kg, notes, user_id: userData?.user?.id })
+    } else if (existing.reps !== reps || existing.kg !== kg || existing.notes !== notes) {
+      updates.push({ id: existing.id, reps, kg, notes })
     }
   }
   const removedIds = current.filter((w) => !wanted.has(w.set)).map((w) => w.id)
@@ -144,8 +144,8 @@ export async function replaceWorkoutSets(
   }
 
   const updated = await Promise.all(
-    updates.map(({ id, reps, kg }) =>
-      supabase.from('workout').update({ reps, kg }).eq('id', id).select('id')
+    updates.map(({ id, reps, kg, notes }) =>
+      supabase.from('workout').update({ reps, kg, notes }).eq('id', id).select('id')
     )
   )
   const failedUpdate = updated.find((r) => r.error || r.data.length !== 1)
