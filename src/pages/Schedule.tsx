@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import PullToRefresh from 'react-simple-pull-to-refresh'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule } from '../services/schedule'
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule, reorderSchedules } from '../services/schedule'
 import { getExercises } from '../services/exercises'
 import type { ExerciseRow, ScheduleInsert, ScheduleWithExercise } from '../types/entityTypes'
 import {
@@ -19,17 +18,74 @@ import {
     ToggleButton,
     ToggleButtonGroup,
     IconButton,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
 } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, DragIndicator as DragIndicatorIcon } from '@mui/icons-material'
+import {
+    DndContext,
+    PointerSensor,
+    KeyboardSensor,
+    useSensor,
+    useSensors,
+    closestCenter,
+    type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable,
+    arrayMove,
+    sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 // Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay()
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const DAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 // Displayed Monday first
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
+
+function SortableScheduleItem({
+    item,
+    onEdit,
+    onDelete,
+}: {
+    item: ScheduleWithExercise
+    onEdit: () => void
+    onDelete: () => void
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+
+    return (
+        <ListItem
+            ref={setNodeRef}
+            style={{
+                transform: CSS.Transform.toString(transform),
+                transition,
+                opacity: isDragging ? 0.5 : 1,
+            }}
+            secondaryAction={
+                <>
+                    <IconButton aria-label="Edit schedule" onClick={onEdit}>
+                        <EditIcon />
+                    </IconButton>
+                    <IconButton aria-label="Delete schedule" onClick={onDelete}>
+                        <DeleteIcon />
+                    </IconButton>
+                </>
+            }
+        >
+            <IconButton
+                aria-label="Drag to reorder"
+                {...attributes}
+                {...listeners}
+                sx={{ cursor: 'grab', touchAction: 'none', mr: 1 }}
+            >
+                <DragIndicatorIcon />
+            </IconButton>
+            <ListItemText primary={item.exercises.name} secondary={item.exercises.category} />
+        </ListItem>
+    )
+}
 
 export default function Schedule() {
     const [items, setItems] = useState<ScheduleWithExercise[] | null>(null)
@@ -44,9 +100,10 @@ export default function Schedule() {
     const [editing, setEditing] = useState<ScheduleWithExercise | null>(null)
     const [deleting, setDeleting] = useState<ScheduleWithExercise | null>(null)
     const [deleteBusy, setDeleteBusy] = useState(false)
-    const theme = useTheme()
-    // Swipe-to-refresh on small screens only; bigger screens use the Refresh button
-    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'))
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    )
 
     async function load() {
         setLoading(true)
@@ -65,7 +122,13 @@ export default function Schedule() {
         setExerciseId(schedule?.exerciseId ?? '')
         setError(null)
         setModalOpen(true)
-        setExercises((await getExercises()) ?? [])
+        const fetched = (await getExercises()) ?? []
+        const sorted = [...fetched].sort((a, b) => {
+            const catCompare = (a.category ?? '').localeCompare(b.category ?? '')
+            if (catCompare !== 0) return catCompare
+            return a.name.localeCompare(b.name)
+        })
+        setExercises(sorted)
     }
 
     function closeModal() {
@@ -111,25 +174,32 @@ export default function Schedule() {
 
     const dayItems = (items ?? []).filter((it) => it.day === selectedDay)
 
-    const spinner = (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={24} />
-        </Box>
-    )
+    function handleDragEnd(event: DragEndEvent) {
+        const { active, over } = event
+        if (!over || active.id === over.id) return
+
+        const oldIndex = dayItems.findIndex((it) => it.id === active.id)
+        const newIndex = dayItems.findIndex((it) => it.id === over.id)
+        if (oldIndex === -1 || newIndex === -1) return
+
+        const reordered = arrayMove(dayItems, oldIndex, newIndex)
+        const reorderedIds = new Set(reordered.map((it) => it.id))
+
+        setItems((prev) => {
+            if (!prev) return prev
+            const others = prev.filter((it) => !reorderedIds.has(it.id))
+            return [...others, ...reordered]
+        })
+
+        reorderSchedules(reordered.map((it) => it.id)).then((ok) => {
+            if (!ok) setError('Failed to save new order')
+        })
+    }
 
     return (
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="h5" sx={{ flexGrow: 1 }}>Schedule</Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={load}
-                    disabled={loading}
-                    sx={{ display: { xs: 'none', md: 'inline-flex' } }}
-                >
-                    Refresh
-                </Button>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add to schedule
                 </Button>
@@ -153,44 +223,32 @@ export default function Schedule() {
                 ))}
             </ToggleButtonGroup>
 
-            <PullToRefresh
-                onRefresh={load}
-                isPullable={isSmallScreen}
-                pullingContent={spinner}
-                refreshingContent={spinner}
-            >
-                <Box sx={{ minHeight: '60vh' }}>
-                    {loading && !items ? (
-                        <Typography>Loading...</Typography>
-                    ) : (
-                        <List>
-                            {dayItems.length > 0 ? (
-                                dayItems.map((it) => (
-                                    <ListItem
-                                        key={it.id}
-                                        secondaryAction={
-                                            <>
-                                                <IconButton aria-label="Edit schedule" onClick={() => openModal(it)}>
-                                                    <EditIcon />
-                                                </IconButton>
-                                                <IconButton aria-label="Delete schedule" onClick={() => { setError(null); setDeleting(it) }}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </>
-                                        }
-                                    >
-                                        <ListItemText primary={it.exercises.name} secondary={it.exercises.category} />
-                                    </ListItem>
-                                ))
-                            ) : (
-                                <Typography>Nothing scheduled for {DAY_NAMES[selectedDay]}.</Typography>
-                            )}
-                        </List>
-                    )}
-                </Box>
-            </PullToRefresh>
+            <Box sx={{ minHeight: '60vh' }}>
+                {loading && !items ? (
+                    <Typography>Loading...</Typography>
+                ) : (
+                    <List>
+                        {dayItems.length > 0 ? (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                <SortableContext items={dayItems.map((it) => it.id)} strategy={verticalListSortingStrategy}>
+                                    {dayItems.map((it) => (
+                                        <SortableScheduleItem
+                                            key={it.id}
+                                            item={it}
+                                            onEdit={() => openModal(it)}
+                                            onDelete={() => { setError(null); setDeleting(it) }}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
+                        ) : (
+                            <Typography>Nothing scheduled for {DAY_NAMES[selectedDay]}.</Typography>
+                        )}
+                    </List>
+                )}
+            </Box>
 
-            <Dialog open={modalOpen} onClose={closeModal}>
+            <Dialog open={modalOpen} onClose={closeModal} fullWidth maxWidth="sm">
                 <DialogTitle>{editing ? 'Edit schedule' : 'Add to schedule'}</DialogTitle>
                 <form onSubmit={handleSubmit}>
                     <DialogContent>
@@ -214,9 +272,21 @@ export default function Schedule() {
                             fullWidth
                             required
                             helperText={exercises.length === 0 ? 'Create an exercise first' : undefined}
+                            slotProps={{
+                                select: {
+                                    renderValue: (value) => exercises.find((ex) => ex.id === value)?.name ?? '',
+                                },
+                            }}
                         >
                             {exercises.map((ex) => (
-                                <MenuItem key={ex.id} value={ex.id}>{ex.name}</MenuItem>
+                                <MenuItem key={ex.id} value={ex.id}>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                                        <Typography variant="body1">{ex.name}</Typography>
+                                        {ex.category && (
+                                            <Typography variant="caption" color="text.secondary">{ex.category}</Typography>
+                                        )}
+                                    </Box>
+                                </MenuItem>
                             ))}
                         </TextField>
                         {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}

@@ -51,6 +51,7 @@ export type Database = {
           disabledAt: string | null
           exerciseId: string
           id: string
+          order: number | null
           user_id: string | null
         }
         Insert: {
@@ -59,6 +60,7 @@ export type Database = {
           disabledAt?: string | null
           exerciseId: string
           id?: string
+          order?: number | null
           user_id?: string | null
         }
         Update: {
@@ -67,6 +69,7 @@ export type Database = {
           disabledAt?: string | null
           exerciseId?: string
           id?: string
+          order?: number | null
           user_id?: string | null
         }
         Relationships: [

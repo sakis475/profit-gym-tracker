@@ -19,6 +19,7 @@ export async function getSchedules(day?: number): Promise<ScheduleWithExercise[]
 
   const { data, error } = await query
     .order('day', { ascending: true })
+    .order('order', { ascending: true, nullsFirst: false })
     .order('createdAt', { ascending: true })
 
   if (error) {
@@ -27,6 +28,23 @@ export async function getSchedules(day?: number): Promise<ScheduleWithExercise[]
   }
 
   return data
+}
+
+// Persists a new order for a single day's schedule entries, in the given order
+export async function reorderSchedules(orderedIds: string[]): Promise<boolean> {
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase.from('scheduler').update({ order: index }).eq('id', id)
+    )
+  )
+
+  const error = results.find((res) => res.error)?.error
+  if (error) {
+    console.error('Reorder schedules error:', error)
+    return false
+  }
+
+  return true
 }
 
 export async function createSchedule(

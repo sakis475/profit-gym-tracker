@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import PullToRefresh from 'react-simple-pull-to-refresh'
+import { useEffect, useMemo, useState } from 'react'
 import { getExercises, getExerciseCategories, createExercise, updateExercise, deleteExercise } from '../services/exercises'
 import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
 import {
@@ -16,11 +15,14 @@ import {
     DialogActions,
     TextField,
     IconButton,
-    CircularProgress,
-    useMediaQuery,
-    useTheme,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
 } from '@mui/material'
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material'
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
+
+type SortBy = 'category' | 'name'
 
 export default function ExercisesList() {
     const [items, setItems] = useState<ExerciseRow[] | null>(null)
@@ -34,9 +36,8 @@ export default function ExercisesList() {
     const [editing, setEditing] = useState<ExerciseRow | null>(null)
     const [deleting, setDeleting] = useState<ExerciseRow | null>(null)
     const [deleteBusy, setDeleteBusy] = useState(false)
-    const theme = useTheme()
-    // Swipe-to-refresh on small screens only; bigger screens use the Refresh button
-    const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'))
+    const [filterCategory, setFilterCategory] = useState('')
+    const [sortBy, setSortBy] = useState<SortBy>('category')
 
     async function load() {
         setLoading(true)
@@ -102,66 +103,95 @@ export default function ExercisesList() {
         load()
     }
 
-    const spinner = (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={24} />
-        </Box>
-    )
+    const availableCategories = useMemo(() => {
+        const set = new Set<string>()
+        for (const it of items ?? []) {
+            const trimmed = it.category?.trim()
+            if (trimmed) set.add(trimmed)
+        }
+        return [...set].sort((a, b) => a.localeCompare(b))
+    }, [items])
+
+    const displayedItems = useMemo(() => {
+        const filtered = (items ?? []).filter((it) =>
+            filterCategory ? it.category === filterCategory : true
+        )
+        return [...filtered].sort((a, b) => {
+            if (sortBy === 'category') {
+                const catCompare = (a.category ?? '').localeCompare(b.category ?? '')
+                if (catCompare !== 0) return catCompare
+            }
+            return a.name.localeCompare(b.name)
+        })
+    }, [items, filterCategory, sortBy])
 
     return (
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={<RefreshIcon />}
-                    onClick={load}
-                    disabled={loading}
-                    sx={{ display: { xs: 'none', md: 'inline-flex' } }}
-                >
-                    Refresh
-                </Button>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add exercise
                 </Button>
             </Box>
 
-            <PullToRefresh
-                onRefresh={load}
-                isPullable={isSmallScreen}
-                pullingContent={spinner}
-                refreshingContent={spinner}
-            >
-                <Box sx={{ minHeight: '60vh' }}>
-                    {loading && !items ? (
-                        <Typography>Loading...</Typography>
-                    ) : (
-                        <List>
-                            {items && items.length > 0 ? (
-                                items.map((it) => (
-                                    <ListItem
-                                        key={it.id}
-                                        secondaryAction={
-                                            <>
-                                                <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
-                                                    <EditIcon />
-                                                </IconButton>
-                                                <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </>
-                                        }
-                                    >
-                                        <ListItemText primary={it.name} secondary={it.category} />
-                                    </ListItem>
-                                ))
-                            ) : (
-                                <Typography>No exercises found.</Typography>
-                            )}
-                        </List>
-                    )}
-                </Box>
-            </PullToRefresh>
+            <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel id="filter-category-label">Filter by category</InputLabel>
+                    <Select
+                        labelId="filter-category-label"
+                        label="Filter by category"
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                    >
+                        <MenuItem value="">All categories</MenuItem>
+                        {availableCategories.map((cat) => (
+                            <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel id="sort-by-label">Sort by</InputLabel>
+                    <Select
+                        labelId="sort-by-label"
+                        label="Sort by"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as SortBy)}
+                    >
+                        <MenuItem value="category">Category</MenuItem>
+                        <MenuItem value="name">Name</MenuItem>
+                    </Select>
+                </FormControl>
+            </Box>
+
+            <Box sx={{ minHeight: '60vh' }}>
+                {loading && !items ? (
+                    <Typography>Loading...</Typography>
+                ) : (
+                    <List>
+                        {displayedItems.length > 0 ? (
+                            displayedItems.map((it) => (
+                                <ListItem
+                                    key={it.id}
+                                    secondaryAction={
+                                        <>
+                                            <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
+                                                <EditIcon />
+                                            </IconButton>
+                                            <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
+                                                <DeleteIcon />
+                                            </IconButton>
+                                        </>
+                                    }
+                                >
+                                    <ListItemText primary={it.name} secondary={it.category} />
+                                </ListItem>
+                            ))
+                        ) : (
+                            <Typography>No exercises found.</Typography>
+                        )}
+                    </List>
+                )}
+            </Box>
 
             <Dialog open={modalOpen} onClose={closeModal}>
                 <DialogTitle>{editing ? 'Edit exercise' : 'Create exercise'}</DialogTitle>
