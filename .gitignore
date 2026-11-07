@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Personal spreadsheets (nutrition plan source data)
+*.ods

@@ -10,10 +10,65 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
+      body_weight: {
+        Row: {
+          createdAt: string
+          date: string
+          disabledAt: string | null
+          id: string
+          kg: number
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          createdAt?: string
+          date: string
+          disabledAt?: string | null
+          id?: string
+          kg: number
+          notes?: string | null
+          user_id?: string
+        }
+        Update: {
+          createdAt?: string
+          date?: string
+          disabledAt?: string | null
+          id?: string
+          kg?: number
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       exercises: {
         Row: {
           category: string | null
@@ -41,6 +96,232 @@ export type Database = {
           name?: string
           notes?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      food_log: {
+        Row: {
+          carbs: number
+          createdAt: string
+          date: string
+          disabledAt: string | null
+          fat: number
+          fiber: number
+          foodId: string
+          id: string
+          kcal: number
+          mealId: string
+          planId: string | null
+          protein: number
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          carbs?: number
+          createdAt?: string
+          date: string
+          disabledAt?: string | null
+          fat?: number
+          fiber?: number
+          foodId: string
+          id?: string
+          kcal?: number
+          mealId: string
+          planId?: string | null
+          protein?: number
+          quantity: number
+          user_id?: string
+        }
+        Update: {
+          carbs?: number
+          createdAt?: string
+          date?: string
+          disabledAt?: string | null
+          fat?: number
+          fiber?: number
+          foodId?: string
+          id?: string
+          kcal?: number
+          mealId?: string
+          planId?: string | null
+          protein?: number
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_log_foodId_fkey"
+            columns: ["foodId"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_log_mealId_fkey"
+            columns: ["mealId"]
+            isOneToOne: false
+            referencedRelation: "meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_log_planId_fkey"
+            columns: ["planId"]
+            isOneToOne: false
+            referencedRelation: "meal_plan"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      foods: {
+        Row: {
+          carbs: number
+          createdAt: string
+          disabledAt: string | null
+          fat: number
+          fiber: number
+          id: string
+          kcal: number
+          name: string
+          notes: string | null
+          protein: number
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          carbs?: number
+          createdAt?: string
+          disabledAt?: string | null
+          fat?: number
+          fiber?: number
+          id?: string
+          kcal?: number
+          name: string
+          notes?: string | null
+          protein?: number
+          unit?: string
+          user_id?: string
+        }
+        Update: {
+          carbs?: number
+          createdAt?: string
+          disabledAt?: string | null
+          fat?: number
+          fiber?: number
+          id?: string
+          kcal?: number
+          name?: string
+          notes?: string | null
+          protein?: number
+          unit?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      meal_plan: {
+        Row: {
+          createdAt: string
+          day: number
+          disabledAt: string | null
+          foodId: string
+          id: string
+          mealId: string
+          order: number | null
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          createdAt?: string
+          day: number
+          disabledAt?: string | null
+          foodId: string
+          id?: string
+          mealId: string
+          order?: number | null
+          quantity: number
+          user_id?: string
+        }
+        Update: {
+          createdAt?: string
+          day?: number
+          disabledAt?: string | null
+          foodId?: string
+          id?: string
+          mealId?: string
+          order?: number | null
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plan_foodId_fkey"
+            columns: ["foodId"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_plan_mealId_fkey"
+            columns: ["mealId"]
+            isOneToOne: false
+            referencedRelation: "meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meals: {
+        Row: {
+          createdAt: string
+          disabledAt: string | null
+          id: string
+          name: string
+          order: number | null
+          user_id: string
+        }
+        Insert: {
+          createdAt?: string
+          disabledAt?: string | null
+          id?: string
+          name: string
+          order?: number | null
+          user_id?: string
+        }
+        Update: {
+          createdAt?: string
+          disabledAt?: string | null
+          id?: string
+          name?: string
+          order?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      nutrition_goals: {
+        Row: {
+          carbs: number | null
+          fat: number | null
+          fiber: number | null
+          kcal: number | null
+          protein: number | null
+          updatedAt: string
+          user_id: string
+        }
+        Insert: {
+          carbs?: number | null
+          fat?: number | null
+          fiber?: number | null
+          kcal?: number | null
+          protein?: number | null
+          updatedAt?: string
+          user_id?: string
+        }
+        Update: {
+          carbs?: number | null
+          fat?: number | null
+          fiber?: number | null
+          kcal?: number | null
+          protein?: number | null
+          updatedAt?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -260,6 +541,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

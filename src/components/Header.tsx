@@ -12,6 +12,8 @@ const navLinks = [
     { label: 'Exercises', to: '/' },
     { label: 'Workout', to: '/workout' },
     { label: 'Schedule', to: '/schedule' },
+    { label: 'History', to: '/history' },
+    { label: 'Nutrition', to: '/nutrition' },
 ]
 
 export default function Header({ user, onSignOut }: Props) {
@@ -20,14 +22,14 @@ export default function Header({ user, onSignOut }: Props) {
     return (
         <AppBar position="sticky">
             <Toolbar>
-                <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
+                <Box sx={{ flexGrow: 1, display: 'flex', gap: 1, overflowX: 'auto', minWidth: 0 }}>
                     {user && navLinks.map((link) => (
                         <Button
                             key={link.to}
                             color="inherit"
                             component={RouterLink}
                             to={link.to}
-                            sx={{ fontWeight: pathname === link.to ? 700 : 400 }}
+                            sx={{ fontWeight: pathname === link.to ? 700 : 400, flexShrink: 0 }}
                         >
                             {link.label}
                         </Button>

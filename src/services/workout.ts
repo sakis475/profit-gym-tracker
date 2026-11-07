@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase'
-import type { WorkoutRow, WorkoutInsert } from '../types/entityTypes'
+import type { WorkoutRow, WorkoutInsert, WorkoutWithExercise } from '../types/entityTypes'
 
 
 // Every row is one set. The sets logged together share the same createdAt, which is
@@ -52,6 +52,43 @@ export async function getLastWorkoutSets(
   return getWorkoutSets(exerciseId, last.createdAt)
 }
 
+// The set with the highest `column`, the other column breaking a tie and the first time
+// winning after that. Zero is left out with null, it means nothing was entered.
+async function getTopSet(
+  exerciseId: string,
+  column: 'kg' | 'reps',
+  before?: string
+): Promise<WorkoutRow | null> {
+  let query = supabase
+    .from('workout')
+    .select('*')
+    .eq('exerciseId', exerciseId)
+    .is('disabledAt', null)
+    .gt(column, 0)
+
+  if (before) query = query.lt('createdAt', before)
+
+  const { data, error } = await query
+    .order(column, { ascending: false })
+    .order(column === 'kg' ? 'reps' : 'kg', { ascending: false, nullsFirst: false })
+    .order('createdAt', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Get top set error:', error)
+    return null
+  }
+
+  return data
+}
+
+// The max of an exercise, optionally only from before `before` (ISO string): its heaviest
+// set, or for an exercise done without weight the set with the most reps. Null when there is none.
+export async function getMaxSet(exerciseId: string, before?: string): Promise<WorkoutRow | null> {
+  return (await getTopSet(exerciseId, 'kg', before)) ?? getTopSet(exerciseId, 'reps', before)
+}
+
 export async function getWorkoutsSince(since: string): Promise<WorkoutRow[] | null> {
   const { data, error } = await supabase
     .from('workout')
@@ -66,6 +103,34 @@ export async function getWorkoutsSince(since: string): Promise<WorkoutRow[] | nu
   }
 
   return data
+}
+
+const HISTORY_PAGE_SIZE = 1000
+
+// Every logged set, newest workout first. The exercise is joined without filtering on its
+// disabledAt, so workouts of a deleted exercise stay in the history. Fetched in pages since
+// the API caps how many rows one request returns.
+export async function getWorkoutHistory(): Promise<WorkoutWithExercise[] | null> {
+  const rows: WorkoutWithExercise[] = []
+
+  for (let from = 0; ; from += HISTORY_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('workout')
+      .select('*, exercises(name, category)')
+      .is('disabledAt', null)
+      .order('createdAt', { ascending: false })
+      .order('set', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + HISTORY_PAGE_SIZE - 1)
+
+    if (error) {
+      console.error('Read workout history error:', error)
+      return null
+    }
+
+    rows.push(...data)
+    if (data.length < HISTORY_PAGE_SIZE) return rows
+  }
 }
 
 export async function createWorkoutSets(

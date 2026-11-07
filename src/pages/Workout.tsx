@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { getSchedules } from '../services/schedule'
-import { getLastWorkoutSets, getWorkoutsSince, createWorkoutSets, replaceWorkoutSets } from '../services/workout'
+import { getLastWorkoutSets, getMaxSet, getWorkoutsSince, createWorkoutSets, replaceWorkoutSets } from '../services/workout'
+import { formatSet } from '../lib/workoutStats'
 import type { ScheduleWithExercise, WorkoutRow } from '../types/entityTypes'
 import {
     Typography,
@@ -14,7 +15,13 @@ import {
     Stack,
     IconButton,
 } from '@mui/material'
-import { Add as AddIcon, Check as CheckIcon, Close as CloseIcon, Edit as EditIcon } from '@mui/icons-material'
+import {
+    Add as AddIcon,
+    Check as CheckIcon,
+    Close as CloseIcon,
+    Edit as EditIcon,
+    EmojiEvents as TrophyIcon,
+} from '@mui/icons-material'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -42,6 +49,16 @@ function groupByExercise(rows: WorkoutRow[]) {
     return grouped
 }
 
+// Whether any of `sets` beats the max: more kg, or as much kg for more reps. For a max
+// without weight (a bodyweight exercise) only more reps count.
+function beatsMax(sets: WorkoutRow[], max: WorkoutRow) {
+    return sets.some((w) =>
+        max.kg
+            ? (w.kg ?? 0) > max.kg || ((w.kg ?? 0) === max.kg && (w.reps ?? 0) > (max.reps ?? 0))
+            : (w.reps ?? 0) > (max.reps ?? 0)
+    )
+}
+
 // One row per set number, so a gap in the logged sets stays a gap
 function setsToFields(sets: WorkoutRow[]): SetFields[] {
     const count = Math.max(1, ...sets.map((w) => w.set ?? 0))
@@ -58,6 +75,8 @@ export default function Workout() {
     const [loadError, setLoadError] = useState(false)
     // Sets of the last workout of each exercise before today: what the user aims to beat
     const [last, setLast] = useState<Record<string, WorkoutRow[]>>({})
+    // Best set of each exercise before today, so today's sets can be told apart as a new max
+    const [max, setMax] = useState<Record<string, WorkoutRow | null>>({})
     // Sets already logged today, by exercise
     const [logged, setLogged] = useState<Record<string, WorkoutRow[]>>({})
     // Sets being entered, by exercise. Until the user touches an exercise it has one row
@@ -81,11 +100,15 @@ export default function Workout() {
                 return
             }
 
-            const lastSets = await Promise.all(schedules.map((s) => getLastWorkoutSets(s.exerciseId, start)))
+            const [lastSets, maxSets] = await Promise.all([
+                Promise.all(schedules.map((s) => getLastWorkoutSets(s.exerciseId, start))),
+                Promise.all(schedules.map((s) => getMaxSet(s.exerciseId, start))),
+            ])
             if (cancelled) return
 
             setItems(schedules)
             setLast(Object.fromEntries(schedules.map((s, i) => [s.exerciseId, lastSets[i] ?? []])))
+            setMax(Object.fromEntries(schedules.map((s, i) => [s.exerciseId, maxSets[i]])))
             setLogged(groupByExercise(todays ?? []))
             setLoading(false)
         }
@@ -197,6 +220,8 @@ export default function Workout() {
                         const previous = last[id] ?? []
                         const sets = locked ? setsToFields(done) : draftSets(id)
                         const previousBySet = new Map(previous.map((w) => [w.set, w]))
+                        const best = max[id]
+                        const newMax = !!done && !!best && beatsMax(done, best)
 
                         return (
                             <Paper key={it.id} variant="outlined" sx={{ p: 2 }}>
@@ -210,6 +235,9 @@ export default function Workout() {
                                                 </Typography>
                                             )}
                                         </Box>
+                                        {newMax && (
+                                            <Chip color="warning" size="small" icon={<TrophyIcon />} label="New max" />
+                                        )}
                                         {done && (
                                             <Chip
                                                 color={isEditing ? 'default' : 'success'}
@@ -220,11 +248,22 @@ export default function Workout() {
                                         )}
                                     </Box>
 
-                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                        {previous.length > 0
-                                            ? `Previous workout: ${formatDate(previous[0].createdAt)}`
-                                            : 'No previous workout'}
-                                    </Typography>
+                                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', columnGap: 3 }}>
+                                        <Typography variant="body2" color="text.secondary">
+                                            {previous.length > 0
+                                                ? `Previous workout: ${formatDate(previous[0].createdAt)}`
+                                                : 'No previous workout'}
+                                        </Typography>
+                                        {best && (
+                                            <Typography variant="body2" color="text.secondary">
+                                                Max:{' '}
+                                                <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                                                    {formatSet(best)}
+                                                </Box>
+                                                {' '}({formatDate(best.createdAt)})
+                                            </Typography>
+                                        )}
+                                    </Box>
 
                                     <Stack spacing={1.5} sx={{ mt: 2 }}>
                                         {sets.map((row, i) => {

@@ -18,7 +18,6 @@ export default function Login({ onSuccess }: Props) {
         setError(null)
         setLoading(true)
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-        console.log('signInWithPassword response', { data, error })
         setLoading(false)
         if (error) {
             setError(error.message)
@@ -32,7 +31,6 @@ export default function Login({ onSuccess }: Props) {
         setError(null)
         setLoading(true)
         const { data, error } = await supabase.auth.signUp({ email, password })
-        console.log('signUp response', { data, error })
         setLoading(false)
         if (error) {
             setError(error.message)
