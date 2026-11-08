@@ -325,6 +325,36 @@ export type Database = {
         }
         Relationships: []
       }
+      profile: {
+        Row: {
+          activityLevel: string | null
+          birthDate: string | null
+          goal: string | null
+          heightCm: number | null
+          sex: string | null
+          updatedAt: string
+          user_id: string
+        }
+        Insert: {
+          activityLevel?: string | null
+          birthDate?: string | null
+          goal?: string | null
+          heightCm?: number | null
+          sex?: string | null
+          updatedAt?: string
+          user_id?: string
+        }
+        Update: {
+          activityLevel?: string | null
+          birthDate?: string | null
+          goal?: string | null
+          heightCm?: number | null
+          sex?: string | null
+          updatedAt?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       scheduler: {
         Row: {
           createdAt: string | null

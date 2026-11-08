@@ -1,6 +1,6 @@
 import { Link as RouterLink, useLocation } from 'react-router-dom'
 import { AppBar, Toolbar, Button, Box, IconButton, Tooltip } from '@mui/material'
-import { Logout as LogoutIcon } from '@mui/icons-material'
+import { AccountCircle as ProfileIcon, Logout as LogoutIcon } from '@mui/icons-material'
 import type { User } from '@supabase/supabase-js'
 
 type Props = {
@@ -37,11 +37,24 @@ export default function Header({ user, onSignOut }: Props) {
                 </Box>
 
                 {user && (
-                    <Tooltip title="Sign out">
-                        <IconButton color="inherit" onClick={onSignOut}>
-                            <LogoutIcon />
-                        </IconButton>
-                    </Tooltip>
+                    <Box sx={{ display: 'flex', flexShrink: 0 }}>
+                        <Tooltip title="Profile">
+                            <IconButton
+                                color="inherit"
+                                component={RouterLink}
+                                to="/profile"
+                                aria-label="Profile"
+                                aria-current={pathname === '/profile' ? 'page' : undefined}
+                            >
+                                <ProfileIcon />
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Sign out">
+                            <IconButton color="inherit" onClick={onSignOut} aria-label="Sign out">
+                                <LogoutIcon />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 )}
             </Toolbar>
         </AppBar>

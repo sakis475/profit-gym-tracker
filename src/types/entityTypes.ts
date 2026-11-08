@@ -40,3 +40,6 @@ export type FoodLogUpdate = Database['public']['Tables']['food_log']['Update']
 export type FoodLogWithFood = FoodLogRow & { foods: Pick<FoodRow, 'name' | 'unit'> }
 
 export type BodyWeightRow = Database['public']['Tables']['body_weight']['Row']
+
+export type ProfileRow = Database['public']['Tables']['profile']['Row']
+export type ProfileInsert = Database['public']['Tables']['profile']['Insert']

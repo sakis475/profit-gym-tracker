@@ -8,6 +8,7 @@ import Workout from './pages/Workout'
 import Schedule from './pages/Schedule'
 import History from './pages/History'
 import Nutrition from './pages/Nutrition'
+import Profile from './pages/Profile'
 import Header from './components/Header'
 import { CssBaseline, Container } from '@mui/material'
 
@@ -65,6 +66,10 @@ function App() {
             <Route
               path="/nutrition"
               element={user ? <Nutrition /> : <Navigate to="/" replace />}
+            />
+            <Route
+              path="/profile"
+              element={user ? <Profile /> : <Navigate to="/" replace />}
             />
           </Routes>
         </Container>
