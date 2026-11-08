@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getExercises, getExerciseCategories, createExercise, updateExercise, deleteExercise } from '../services/exercises'
-import type { ExerciseInsert, ExerciseRow } from '../types/entityTypes'
+import { getExercises, getExerciseCategories, createExercise, updateExercise, deleteExercise } from '../../services/exercises'
+import type { ExerciseInsert, ExerciseRow } from '../../types/entityTypes'
 import {
     Autocomplete,
     Typography,
@@ -127,8 +127,7 @@ export default function ExercisesList() {
 
     return (
         <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="h5" sx={{ flexGrow: 1 }}>Exercises</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add exercise
                 </Button>

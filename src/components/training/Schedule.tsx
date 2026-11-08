@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { getSchedules, createSchedule, updateSchedule, deleteSchedule, reorderSchedules } from '../services/schedule'
-import { getExercises } from '../services/exercises'
-import type { ExerciseRow, ScheduleInsert, ScheduleWithExercise } from '../types/entityTypes'
+import { getSchedules, createSchedule, updateSchedule, deleteSchedule, reorderSchedules } from '../../services/schedule'
+import { getExercises } from '../../services/exercises'
+import type { ExerciseRow, ScheduleInsert, ScheduleWithExercise } from '../../types/entityTypes'
 import {
     Typography,
     Button,
@@ -208,8 +208,7 @@ export default function Schedule() {
 
     return (
         <>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="h5" sx={{ flexGrow: 1 }}>Schedule</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
                     Add to schedule
                 </Button>

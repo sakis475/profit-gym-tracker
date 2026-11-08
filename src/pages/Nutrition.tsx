@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Box, Tab, Tabs, Typography } from '@mui/material'
 import { getBodyWeights, getFoods, getGoals, getMealPlan, getMeals } from '../services/nutrition'
+import { useTabParam } from '../lib/useTabParam'
 import type { BodyWeightRow, FoodRow, MealPlanWithFood, MealRow, NutritionGoalsRow } from '../types/entityTypes'
 import FoodDiary from '../components/nutrition/FoodDiary'
 import MealPlan from '../components/nutrition/MealPlan'
 import FoodsList from '../components/nutrition/FoodsList'
 import NutritionProgress from '../components/nutrition/NutritionProgress'
 
-type View = 'today' | 'plan' | 'foods' | 'progress'
+const TABS = ['today', 'plan', 'foods', 'progress'] as const
+type View = (typeof TABS)[number]
 
 type Data = {
     plan: MealPlanWithFood[]
@@ -18,7 +20,7 @@ type Data = {
 }
 
 export default function Nutrition() {
-    const [view, setView] = useState<View>('today')
+    const [view, setView] = useTabParam(TABS)
     // undefined while loading the first time, null when it failed
     const [data, setData] = useState<Data | null | undefined>(undefined)
     // Bumped after a change, to load everything again. It is little data, so this keeps the tabs in step.

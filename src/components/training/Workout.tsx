@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
-import { getSchedules } from '../services/schedule'
-import { getLastWorkoutSets, getMaxSet, getWorkoutsSince, createWorkoutSets, replaceWorkoutSets } from '../services/workout'
-import { formatSet } from '../lib/workoutStats'
-import type { ScheduleWithExercise, WorkoutRow } from '../types/entityTypes'
+import { getSchedules } from '../../services/schedule'
+import { getLastWorkoutSets, getMaxSet, getWorkoutsSince, createWorkoutSets, replaceWorkoutSets } from '../../services/workout'
+import { formatSet } from '../../lib/workoutStats'
+import type { ScheduleWithExercise, WorkoutRow } from '../../types/entityTypes'
 import {
     Typography,
     Button,
@@ -195,10 +195,7 @@ export default function Workout() {
 
     return (
         <>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
-                <Typography variant="h5" sx={{ flexGrow: 1 }}>Workout</Typography>
-                <Typography color="text.secondary">{DAY_NAMES[today]}</Typography>
-            </Box>
+            <Typography variant="h6">{DAY_NAMES[today]}</Typography>
 
             {loading ? (
                 <Typography sx={{ mt: 2 }}>Loading...</Typography>
@@ -206,8 +203,8 @@ export default function Workout() {
                 <Typography color="error" sx={{ mt: 2 }}>Failed to load today's workout.</Typography>
             ) : items.length === 0 ? (
                 <Typography sx={{ mt: 2 }}>
-                    Nothing scheduled for {DAY_NAMES[today]}. Add exercises in the{' '}
-                    <Link component={RouterLink} to="/schedule">Schedule</Link>.
+                    Nothing planned for {DAY_NAMES[today]}. Add exercises in the{' '}
+                    <Link component={RouterLink} to="/training?tab=plan">Plan</Link>.
                 </Typography>
             ) : (
                 <Stack spacing={2} sx={{ mt: 2 }}>

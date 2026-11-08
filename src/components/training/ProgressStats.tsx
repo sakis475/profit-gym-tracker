@@ -14,7 +14,7 @@ import {
     ToggleButtonGroup,
     Typography,
 } from '@mui/material'
-import TrendChart, { type TrendPoint } from './TrendChart'
+import TrendChart, { type TrendPoint } from '../TrendChart'
 import {
     formatNumber,
     formatSet,
@@ -24,7 +24,7 @@ import {
     weekStreak,
     type Session,
     type SessionStats,
-} from '../lib/workoutStats'
+} from '../../lib/workoutStats'
 
 type Props = {
     sessions: Session[]

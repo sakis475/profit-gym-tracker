@@ -3,10 +3,7 @@ import './App.css'
 import { supabase } from './lib/supabase'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
-import ExercisesList from './pages/ExercisesList'
-import Workout from './pages/Workout'
-import Schedule from './pages/Schedule'
-import History from './pages/History'
+import Training from './pages/Training'
 import Nutrition from './pages/Nutrition'
 import Profile from './pages/Profile'
 import Header from './components/Header'
@@ -49,20 +46,16 @@ function App() {
           <Routes>
             <Route
               path="/"
-              element={user ? <ExercisesList /> : <Login onSuccess={setUser} />}
+              element={user ? <Navigate to="/training" replace /> : <Login onSuccess={setUser} />}
             />
             <Route
-              path="/workout"
-              element={user ? <Workout /> : <Navigate to="/" replace />}
+              path="/training"
+              element={user ? <Training /> : <Navigate to="/" replace />}
             />
-            <Route
-              path="/schedule"
-              element={user ? <Schedule /> : <Navigate to="/" replace />}
-            />
-            <Route
-              path="/history"
-              element={user ? <History /> : <Navigate to="/" replace />}
-            />
+            {/* The training pages before they became tabs, so old links and bookmarks still work */}
+            <Route path="/workout" element={<Navigate to="/training" replace />} />
+            <Route path="/schedule" element={<Navigate to="/training?tab=plan" replace />} />
+            <Route path="/history" element={<Navigate to="/training?tab=history" replace />} />
             <Route
               path="/nutrition"
               element={user ? <Nutrition /> : <Navigate to="/" replace />}

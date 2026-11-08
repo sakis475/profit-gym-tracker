@@ -9,10 +9,7 @@ type Props = {
 }
 
 const navLinks = [
-    { label: 'Exercises', to: '/' },
-    { label: 'Workout', to: '/workout' },
-    { label: 'Schedule', to: '/schedule' },
-    { label: 'History', to: '/history' },
+    { label: 'Training', to: '/training' },
     { label: 'Nutrition', to: '/nutrition' },
 ]
 

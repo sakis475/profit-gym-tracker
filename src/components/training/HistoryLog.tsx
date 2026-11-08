@@ -24,7 +24,7 @@ import {
     sessionStats,
     type LogFilters,
     type Session,
-} from '../lib/workoutStats'
+} from '../../lib/workoutStats'
 
 type Props = {
     sessions: Session[]
