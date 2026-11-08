@@ -20,7 +20,12 @@ type Props = {
     reference?: { value: number; label: string }
 }
 
-const MARGIN = { top: 12, right: 16, bottom: 28, left: 48 }
+// The left margin is sized to the widest y label, see axisLabelWidth
+const MARGIN = { top: 12, right: 16, bottom: 28 }
+// Between the y labels and the plot, and before the labels at the edge
+const LABEL_GAP = 8
+const EDGE_PADDING = 4
+const AXIS_FONT_SIZE = 12
 // Below this many points every point gets a marker, above it only the hovered one
 const MAX_MARKERS = 30
 const MIN_TICK_SPACING = 64
@@ -59,6 +64,17 @@ function tickIndexes(xs: number[]) {
     return picked
 }
 
+let measureContext: CanvasRenderingContext2D | null | undefined
+
+// How wide a y label is drawn, measured in the chart's font so labels like "2,000 kcal" are not cut off
+function axisLabelWidth(text: string, fontFamily: string) {
+    if (measureContext === undefined) measureContext = document.createElement('canvas').getContext('2d')
+    // Roughly a digit's width per character, when there is no canvas to measure with
+    if (!measureContext) return text.length * AXIS_FONT_SIZE * 0.6
+    measureContext.font = `${AXIS_FONT_SIZE}px ${fontFamily}`
+    return measureContext.measureText(text).width
+}
+
 // A bar with its top corners rounded, sitting on the baseline
 function barPath(x: number, y: number, w: number, h: number) {
     const r = Math.min(4, w / 2, h)
@@ -79,15 +95,17 @@ export default function TrendChart({ points, kind = 'line', height = 220, format
         return () => observer.disconnect()
     }, [])
 
-    const plotW = Math.max(0, width - MARGIN.left - MARGIN.right)
-    const plotH = height - MARGIN.top - MARGIN.bottom
-
     // The reference line is kept inside the scale
     const ys = [...points.map((p) => p.y), ...(reference ? [reference.value] : [])]
     // Bars encode size by length so they start at zero, a line can zoom in on the change
     const ticks = niceTicks(kind === 'bar' ? 0 : Math.min(...ys), Math.max(...ys))
     const yMin = ticks[0]
     const yMax = ticks[ticks.length - 1]
+
+    const fontFamily = theme.typography.fontFamily ?? 'sans-serif'
+    const left = Math.ceil(Math.max(...ticks.map((t) => axisLabelWidth(formatValue(t), fontFamily)))) + LABEL_GAP + EDGE_PADDING
+    const plotW = Math.max(0, width - left - MARGIN.right)
+    const plotH = height - MARGIN.top - MARGIN.bottom
     const sy = (y: number) => MARGIN.top + plotH - ((y - yMin) / (yMax - yMin)) * plotH
 
     const band = plotW / Math.max(1, points.length)
@@ -95,8 +113,8 @@ export default function TrendChart({ points, kind = 'line', height = 220, format
     const xMax = points[points.length - 1]?.x ?? 0
     const sx = (p: TrendPoint, i: number) =>
         kind === 'bar'
-            ? MARGIN.left + band * (i + 0.5)
-            : MARGIN.left + (xMax === xMin ? plotW / 2 : ((p.x - xMin) / (xMax - xMin)) * plotW)
+            ? left + band * (i + 0.5)
+            : left + (xMax === xMin ? plotW / 2 : ((p.x - xMin) / (xMax - xMin)) * plotW)
 
     const xs = points.map(sx)
     const color = theme.palette.primary.main
@@ -127,19 +145,19 @@ export default function TrendChart({ points, kind = 'line', height = 220, format
                     {ticks.map((t) => (
                         <g key={t}>
                             <line
-                                x1={MARGIN.left}
-                                x2={MARGIN.left + plotW}
+                                x1={left}
+                                x2={left + plotW}
                                 y1={sy(t)}
                                 y2={sy(t)}
                                 stroke={theme.palette.divider}
                                 strokeDasharray={t === yMin ? undefined : '2 4'}
                             />
                             <text
-                                x={MARGIN.left - 8}
+                                x={left - LABEL_GAP}
                                 y={sy(t)}
                                 textAnchor="end"
                                 dominantBaseline="middle"
-                                fontSize={12}
+                                fontSize={AXIS_FONT_SIZE}
                                 fill={theme.palette.text.secondary}
                             >
                                 {formatValue(t)}
@@ -153,7 +171,7 @@ export default function TrendChart({ points, kind = 'line', height = 220, format
                             x={xs[i]}
                             y={height - 8}
                             textAnchor={kind === 'bar' ? 'middle' : i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}
-                            fontSize={12}
+                            fontSize={AXIS_FONT_SIZE}
                             fill={theme.palette.text.secondary}
                         >
                             {formatTick(points[i])}
@@ -163,18 +181,18 @@ export default function TrendChart({ points, kind = 'line', height = 220, format
                     {reference && (
                         <g>
                             <line
-                                x1={MARGIN.left}
-                                x2={MARGIN.left + plotW}
+                                x1={left}
+                                x2={left + plotW}
                                 y1={sy(reference.value)}
                                 y2={sy(reference.value)}
                                 stroke={theme.palette.text.secondary}
                                 strokeDasharray="6 4"
                             />
                             <text
-                                x={MARGIN.left + plotW}
+                                x={left + plotW}
                                 y={sy(reference.value) - 6}
                                 textAnchor="end"
-                                fontSize={12}
+                                fontSize={AXIS_FONT_SIZE}
                                 fill={theme.palette.text.secondary}
                             >
                                 {reference.label}
