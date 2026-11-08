@@ -46,7 +46,8 @@ import { defaultQuantity, describeNutrients, foodNutrients, formatNutrient, sumN
 import type { FoodRow, MealPlanWithFood, MealRow, NutritionGoalsRow } from '../../types/entityTypes'
 import NutrientTotals from './NutrientTotals'
 import FoodEntryDialog, { type FoodEntry } from './FoodEntryDialog'
-import { DragPreview, MealDropZone, QuantityInput, WithFoodSidebar, type FoodDragData } from './FoodDnd'
+import { MealDropZone, QuantityInput, WithFoodSidebar, type FoodDragData } from './FoodDnd'
+import { DragPreview } from '../DragSidebar'
 
 // Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay()
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']

@@ -54,7 +54,8 @@ import type {
 } from '../../types/entityTypes'
 import NutrientTotals from './NutrientTotals'
 import FoodEntryDialog, { type FoodEntry } from './FoodEntryDialog'
-import { DragPreview, MealDropZone, QuantityInput, WithFoodSidebar, type FoodDragData } from './FoodDnd'
+import { MealDropZone, QuantityInput, WithFoodSidebar, type FoodDragData } from './FoodDnd'
+import { DragPreview } from '../DragSidebar'
 
 type Props = {
     plan: MealPlanWithFood[]

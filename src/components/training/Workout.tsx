@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { getSchedules } from '../../services/schedule'
+import { getExercises } from '../../services/exercises'
 import { getLastWorkoutSets, getMaxSet, getWorkoutsSince, createWorkoutSets, replaceWorkoutSets } from '../../services/workout'
 import { formatSet } from '../../lib/workoutStats'
-import type { ScheduleWithExercise, WorkoutRow } from '../../types/entityTypes'
+import type { ExerciseRow, ScheduleWithExercise, WorkoutRow } from '../../types/entityTypes'
 import {
     Typography,
     Button,
@@ -22,6 +23,18 @@ import {
     Edit as EditIcon,
     EmojiEvents as TrophyIcon,
 } from '@mui/icons-material'
+import {
+    DndContext,
+    DragOverlay,
+    KeyboardSensor,
+    PointerSensor,
+    useDroppable,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+    type DragStartEvent,
+} from '@dnd-kit/core'
+import { DragPreview, WithDragSidebar, type SidebarItem } from '../DragSidebar'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -68,9 +81,48 @@ function setsToFields(sets: WorkoutRow[]): SetFields[] {
     })
 }
 
+// An exercise on today's list: planned for today, or added today
+type TodayItem = { key: string; exerciseId: string; name: string; category: string | null; planned: boolean }
+
+// An exercise dragged from the list
+type ExerciseDragData = { kind: 'exercise'; exercise: ExerciseRow }
+
+// Today's cards, which take exercises dropped from the list beside them
+function TodayDropZone({ highlight, children }: { highlight: boolean; children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({ id: 'today' })
+
+    return (
+        <Box
+            ref={setNodeRef}
+            sx={{
+                mt: 2,
+                minHeight: '40vh',
+                borderRadius: 1,
+                border: 2,
+                borderStyle: 'dashed',
+                borderColor: isOver ? 'primary.main' : highlight ? 'divider' : 'transparent',
+                bgcolor: isOver ? 'action.hover' : undefined,
+                transition: 'border-color 120ms, background-color 120ms',
+            }}
+        >
+            {children}
+        </Box>
+    )
+}
+
 export default function Workout() {
     const today = new Date().getDay()
-    const [items, setItems] = useState<ScheduleWithExercise[]>([])
+    const [planned, setPlanned] = useState<ScheduleWithExercise[]>([])
+    // Exercises done today without being planned, in the order they were added
+    const [extras, setExtras] = useState<string[]>([])
+    const [exercises, setExercises] = useState<ExerciseRow[]>([])
+    const [dragging, setDragging] = useState<ExerciseDragData | null>(null)
+    const [notice, setNotice] = useState<string | null>(null)
+    const sensors = useSensors(
+        // A few pixels of movement before a drag starts, so clicks still work
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor)
+    )
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState(false)
     // Sets of the last workout of each exercise before today: what the user aims to beat
@@ -92,7 +144,11 @@ export default function Workout() {
 
         async function init() {
             const start = startOfToday().toISOString()
-            const [schedules, todays] = await Promise.all([getSchedules(today), getWorkoutsSince(start)])
+            const [schedules, todays, allExercises] = await Promise.all([
+                getSchedules(today),
+                getWorkoutsSince(start),
+                getExercises(),
+            ])
             if (cancelled) return
             if (!schedules) {
                 setLoadError(true)
@@ -100,16 +156,24 @@ export default function Workout() {
                 return
             }
 
+            const todaysByExercise = groupByExercise(todays ?? [])
+            const plannedIds = new Set(schedules.map((s) => s.exerciseId))
+            // Logged today without being planned, e.g. dragged in earlier today
+            const extraIds = Object.keys(todaysByExercise).filter((id) => !plannedIds.has(id))
+            const ids = [...plannedIds, ...extraIds]
+
             const [lastSets, maxSets] = await Promise.all([
-                Promise.all(schedules.map((s) => getLastWorkoutSets(s.exerciseId, start))),
-                Promise.all(schedules.map((s) => getMaxSet(s.exerciseId, start))),
+                Promise.all(ids.map((id) => getLastWorkoutSets(id, start))),
+                Promise.all(ids.map((id) => getMaxSet(id, start))),
             ])
             if (cancelled) return
 
-            setItems(schedules)
-            setLast(Object.fromEntries(schedules.map((s, i) => [s.exerciseId, lastSets[i] ?? []])))
-            setMax(Object.fromEntries(schedules.map((s, i) => [s.exerciseId, maxSets[i]])))
-            setLogged(groupByExercise(todays ?? []))
+            setPlanned(schedules)
+            setExtras(extraIds)
+            setExercises(allExercises ?? [])
+            setLast(Object.fromEntries(ids.map((id, i) => [id, lastSets[i] ?? []])))
+            setMax(Object.fromEntries(ids.map((id, i) => [id, maxSets[i]])))
+            setLogged(todaysByExercise)
             setLoading(false)
         }
 
@@ -118,6 +182,59 @@ export default function Workout() {
             cancelled = true
         }
     }, [today])
+
+    const items = useMemo<TodayItem[]>(() => {
+        const byId = new Map(exercises.map((e) => [e.id, e]))
+        return [
+            ...planned.map((s) => ({ key: s.id, exerciseId: s.exerciseId, name: s.exercises.name, category: s.exercises.category, planned: true })),
+            ...extras.map((id) => ({
+                key: `extra:${id}`,
+                exerciseId: id,
+                // Only active exercises are loaded, a deleted one keeps its logged sets without a name
+                name: byId.get(id)?.name ?? 'Deleted exercise',
+                category: byId.get(id)?.category ?? null,
+                planned: false,
+            })),
+        ]
+    }, [planned, extras, exercises])
+
+    const sidebarItems = useMemo<SidebarItem[]>(
+        () => [...exercises]
+            .sort((a, b) => (a.category ?? '').localeCompare(b.category ?? '') || a.name.localeCompare(b.name))
+            .map((exercise) => ({
+                dragId: `exercise:${exercise.id}`,
+                name: exercise.name,
+                detail: exercise.category,
+                data: { kind: 'exercise', exercise } satisfies ExerciseDragData,
+            })),
+        [exercises]
+    )
+
+    // An exercise dropped in gets a card for today, with what it has to beat loaded for it
+    async function addExtra(exercise: ExerciseRow) {
+        setNotice(null)
+        if (items.some((it) => it.exerciseId === exercise.id)) {
+            setNotice(`${exercise.name} is already on today's list.`)
+            return
+        }
+        setExtras((prev) => [...prev, exercise.id])
+        const start = startOfToday().toISOString()
+        const [lastSets, maxSet] = await Promise.all([getLastWorkoutSets(exercise.id, start), getMaxSet(exercise.id, start)])
+        setLast((prev) => ({ ...prev, [exercise.id]: lastSets ?? [] }))
+        setMax((prev) => ({ ...prev, [exercise.id]: maxSet }))
+    }
+
+    // Only for an added exercise with nothing logged yet
+    function removeExtra(exerciseId: string) {
+        setExtras((prev) => prev.filter((id) => id !== exerciseId))
+        stopEditing(exerciseId)
+    }
+
+    function handleDragEnd({ active, over }: DragEndEvent) {
+        setDragging(null)
+        const data = active.data.current as ExerciseDragData | undefined
+        if (over?.id === 'today' && data?.kind === 'exercise') addExtra(data.exercise)
+    }
 
     function draftSets(exerciseId: string): SetFields[] {
         if (entries[exerciseId]) return entries[exerciseId]
@@ -194,165 +311,192 @@ export default function Workout() {
     }
 
     return (
-        <>
-            <Typography variant="h6">{DAY_NAMES[today]}</Typography>
+        <DndContext
+            sensors={sensors}
+            onDragStart={({ active }: DragStartEvent) => setDragging((active.data.current as ExerciseDragData | undefined) ?? null)}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setDragging(null)}
+        >
+            <WithDragSidebar
+                title="Exercises: drag in to do today"
+                items={sidebarItems}
+                emptyText="No exercises yet. Add them in the Exercises tab."
+            >
+                <Typography variant="h6">{DAY_NAMES[today]}</Typography>
+                {notice && <Typography color="text.secondary" sx={{ mt: 1 }}>{notice}</Typography>}
 
-            {loading ? (
-                <Typography sx={{ mt: 2 }}>Loading...</Typography>
-            ) : loadError ? (
-                <Typography color="error" sx={{ mt: 2 }}>Failed to load today's workout.</Typography>
-            ) : items.length === 0 ? (
-                <Typography sx={{ mt: 2 }}>
-                    Nothing planned for {DAY_NAMES[today]}. Add exercises in the{' '}
-                    <Link component={RouterLink} to="/training?tab=plan">Plan</Link>.
-                </Typography>
-            ) : (
-                <Stack spacing={2} sx={{ mt: 2 }}>
-                    {items.map((it) => {
-                        const id = it.exerciseId
-                        const done = logged[id]
-                        const isEditing = !!done && !!editing[id]
-                        // A logged workout is read-only until the user chooses to edit it
-                        const locked = !!done && !isEditing
-                        const previous = last[id] ?? []
-                        const sets = locked ? setsToFields(done) : draftSets(id)
-                        const previousBySet = new Map(previous.map((w) => [w.set, w]))
-                        const best = max[id]
-                        const newMax = !!done && !!best && beatsMax(done, best)
+                {loading ? (
+                    <Typography sx={{ mt: 2 }}>Loading...</Typography>
+                ) : loadError ? (
+                    <Typography color="error" sx={{ mt: 2 }}>Failed to load today's workout.</Typography>
+                ) : (
+                    <TodayDropZone highlight={!!dragging}>
+                        {items.length === 0 ? (
+                            <Typography sx={{ p: 2 }}>
+                                Nothing planned for {DAY_NAMES[today]}. Add exercises in the{' '}
+                                <Link component={RouterLink} to="/training?tab=plan">Plan</Link>
+                                {/* Only where the exercise list is shown */}
+                                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>, or drag them here</Box>.
+                            </Typography>
+                        ) : (
+                            <Stack spacing={2}>
+                                {items.map((it) => {
+                                    const id = it.exerciseId
+                                    const done = logged[id]
+                                    const isEditing = !!done && !!editing[id]
+                                    // A logged workout is read-only until the user chooses to edit it
+                                    const locked = !!done && !isEditing
+                                    const previous = last[id] ?? []
+                                    const sets = locked ? setsToFields(done) : draftSets(id)
+                                    const previousBySet = new Map(previous.map((w) => [w.set, w]))
+                                    const best = max[id]
+                                    const newMax = !!done && !!best && beatsMax(done, best)
 
-                        return (
-                            <Paper key={it.id} variant="outlined" sx={{ p: 2 }}>
-                                <form onSubmit={(e) => handleLog(id, e)}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Box sx={{ flexGrow: 1 }}>
-                                            <Typography variant="h6">{it.exercises.name}</Typography>
-                                            {it.exercises.category && (
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {it.exercises.category}
-                                                </Typography>
-                                            )}
-                                        </Box>
-                                        {newMax && (
-                                            <Chip color="warning" size="small" icon={<TrophyIcon />} label="New max" />
-                                        )}
-                                        {done && (
-                                            <Chip
-                                                color={isEditing ? 'default' : 'success'}
-                                                size="small"
-                                                icon={isEditing ? <EditIcon /> : <CheckIcon />}
-                                                label={isEditing ? 'Editing' : 'Logged'}
-                                            />
-                                        )}
-                                    </Box>
-
-                                    <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', columnGap: 3 }}>
-                                        <Typography variant="body2" color="text.secondary">
-                                            {previous.length > 0
-                                                ? `Previous workout: ${formatDate(previous[0].createdAt)}`
-                                                : 'No previous workout'}
-                                        </Typography>
-                                        {best && (
-                                            <Typography variant="body2" color="text.secondary">
-                                                Max:{' '}
-                                                <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
-                                                    {formatSet(best)}
-                                                </Box>
-                                                {' '}({formatDate(best.createdAt)})
-                                            </Typography>
-                                        )}
-                                    </Box>
-
-                                    <Stack spacing={1.5} sx={{ mt: 2 }}>
-                                        {sets.map((row, i) => {
-                                            const prev = previousBySet.get(i + 1)
-                                            const removable = !locked && sets.length > 1
-                                            return (
-                                                <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                    <Typography sx={{ width: 48, flexShrink: 0 }}>Set {i + 1}</Typography>
-                                                    {(['reps', 'kg'] as const).map((field) => (
-                                                        <TextField
-                                                            key={field}
+                                    return (
+                                        <Paper key={it.key} variant="outlined" sx={{ p: 2 }}>
+                                            <form onSubmit={(e) => handleLog(id, e)}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                    <Box sx={{ flexGrow: 1 }}>
+                                                        <Typography variant="h6">{it.name}</Typography>
+                                                        {(it.category || !it.planned) && (
+                                                            <Typography variant="body2" color="text.secondary">
+                                                                {[it.category, !it.planned && 'Not planned'].filter(Boolean).join(' · ')}
+                                                            </Typography>
+                                                        )}
+                                                    </Box>
+                                                    {newMax && (
+                                                        <Chip color="warning" size="small" icon={<TrophyIcon />} label="New max" />
+                                                    )}
+                                                    {done && (
+                                                        <Chip
+                                                            color={isEditing ? 'default' : 'success'}
                                                             size="small"
-                                                            label={field === 'reps' ? 'Reps' : 'Kg'}
-                                                            type="number"
-                                                            value={row[field]}
-                                                            placeholder={prev ? String(prev[field] ?? '') : ''}
-                                                            onChange={(e) => setField(id, i, field, e.target.value)}
-                                                            disabled={locked || saving === id}
-                                                            InputLabelProps={{ shrink: true }}
-                                                            inputProps={{
-                                                                min: 0,
-                                                                step: field === 'kg' ? 0.5 : 1,
-                                                                inputMode: field === 'kg' ? 'decimal' : 'numeric',
-                                                            }}
-                                                            sx={{ width: { xs: 70, sm: 120 }, flexShrink: 0 }}
+                                                            icon={isEditing ? <EditIcon /> : <CheckIcon />}
+                                                            label={isEditing ? 'Editing' : 'Logged'}
                                                         />
-                                                    ))}
-                                                    <TextField
-                                                        size="small"
-                                                        label="Notes"
-                                                        value={row.notes}
-                                                        placeholder={prev?.notes ?? ''}
-                                                        onChange={(e) => setField(id, i, 'notes', e.target.value)}
-                                                        disabled={locked || saving === id}
-                                                        InputLabelProps={{ shrink: true }}
-                                                        sx={{ flex: 1, minWidth: 0 }}
-                                                    />
-                                                    {!locked && (
-                                                        <IconButton
-                                                            aria-label={`Remove set ${i + 1}`}
-                                                            size="small"
-                                                            disabled={!removable || saving === id}
-                                                            onClick={() => updateSets(id, (rows) => rows.filter((_, j) => j !== i))}
-                                                        >
+                                                    )}
+                                                    {!it.planned && !done && (
+                                                        <IconButton aria-label={`Remove ${it.name} from today`} size="small" onClick={() => removeExtra(id)}>
                                                             <CloseIcon fontSize="small" />
                                                         </IconButton>
                                                     )}
                                                 </Box>
-                                            )
-                                        })}
-                                    </Stack>
 
-                                    {errors[id] && <Typography color="error" sx={{ mt: 1 }}>{errors[id]}</Typography>}
+                                                <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', columnGap: 3 }}>
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {previous.length > 0
+                                                            ? `Previous workout: ${formatDate(previous[0].createdAt)}`
+                                                            : 'No previous workout'}
+                                                    </Typography>
+                                                    {best && (
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            Max:{' '}
+                                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                                                                {formatSet(best)}
+                                                            </Box>
+                                                            {' '}({formatDate(best.createdAt)})
+                                                        </Typography>
+                                                    )}
+                                                </Box>
 
-                                    {locked ? (
-                                        <Box sx={{ mt: 2, textAlign: 'right' }}>
-                                            <Button key="edit" startIcon={<EditIcon />} onClick={() => startEditing(id)}>
-                                                Edit
-                                            </Button>
-                                        </Box>
-                                    ) : (
-                                        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                                            <Button
-                                                key="add"
-                                                startIcon={<AddIcon />}
-                                                onClick={() =>
-                                                    updateSets(id, (rows) => [...rows, rows[rows.length - 1] ?? EMPTY_SET])
-                                                }
-                                                disabled={saving === id}
-                                            >
-                                                Add set
-                                            </Button>
-                                            <Box sx={{ display: 'flex', gap: 1 }}>
-                                                {isEditing && (
-                                                    <Button key="cancel" onClick={() => stopEditing(id)} disabled={saving === id}>
-                                                        Cancel
-                                                    </Button>
+                                                <Stack spacing={1.5} sx={{ mt: 2 }}>
+                                                    {sets.map((row, i) => {
+                                                        const prev = previousBySet.get(i + 1)
+                                                        const removable = !locked && sets.length > 1
+                                                        return (
+                                                            <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                                <Typography sx={{ width: 48, flexShrink: 0 }}>Set {i + 1}</Typography>
+                                                                {(['reps', 'kg'] as const).map((field) => (
+                                                                    <TextField
+                                                                        key={field}
+                                                                        size="small"
+                                                                        label={field === 'reps' ? 'Reps' : 'Kg'}
+                                                                        type="number"
+                                                                        value={row[field]}
+                                                                        placeholder={prev ? String(prev[field] ?? '') : ''}
+                                                                        onChange={(e) => setField(id, i, field, e.target.value)}
+                                                                        disabled={locked || saving === id}
+                                                                        InputLabelProps={{ shrink: true }}
+                                                                        inputProps={{
+                                                                            min: 0,
+                                                                            step: field === 'kg' ? 0.5 : 1,
+                                                                            inputMode: field === 'kg' ? 'decimal' : 'numeric',
+                                                                        }}
+                                                                        sx={{ width: { xs: 70, sm: 120 }, flexShrink: 0 }}
+                                                                    />
+                                                                ))}
+                                                                <TextField
+                                                                    size="small"
+                                                                    label="Notes"
+                                                                    value={row.notes}
+                                                                    placeholder={prev?.notes ?? ''}
+                                                                    onChange={(e) => setField(id, i, 'notes', e.target.value)}
+                                                                    disabled={locked || saving === id}
+                                                                    InputLabelProps={{ shrink: true }}
+                                                                    sx={{ flex: 1, minWidth: 0 }}
+                                                                />
+                                                                {!locked && (
+                                                                    <IconButton
+                                                                        aria-label={`Remove set ${i + 1}`}
+                                                                        size="small"
+                                                                        disabled={!removable || saving === id}
+                                                                        onClick={() => updateSets(id, (rows) => rows.filter((_, j) => j !== i))}
+                                                                    >
+                                                                        <CloseIcon fontSize="small" />
+                                                                    </IconButton>
+                                                                )}
+                                                            </Box>
+                                                        )
+                                                    })}
+                                                </Stack>
+
+                                                {errors[id] && <Typography color="error" sx={{ mt: 1 }}>{errors[id]}</Typography>}
+
+                                                {locked ? (
+                                                    <Box sx={{ mt: 2, textAlign: 'right' }}>
+                                                        <Button key="edit" startIcon={<EditIcon />} onClick={() => startEditing(id)}>
+                                                            Edit
+                                                        </Button>
+                                                    </Box>
+                                                ) : (
+                                                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                                                        <Button
+                                                            key="add"
+                                                            startIcon={<AddIcon />}
+                                                            onClick={() =>
+                                                                updateSets(id, (rows) => [...rows, rows[rows.length - 1] ?? EMPTY_SET])
+                                                            }
+                                                            disabled={saving === id}
+                                                        >
+                                                            Add set
+                                                        </Button>
+                                                        <Box sx={{ display: 'flex', gap: 1 }}>
+                                                            {isEditing && (
+                                                                <Button key="cancel" onClick={() => stopEditing(id)} disabled={saving === id}>
+                                                                    Cancel
+                                                                </Button>
+                                                            )}
+                                                            <Button key="submit" type="submit" variant="contained" disabled={saving === id}>
+                                                                {isEditing
+                                                                    ? (saving === id ? 'Saving…' : 'Save')
+                                                                    : (saving === id ? 'Logging…' : 'Log')}
+                                                            </Button>
+                                                        </Box>
+                                                    </Box>
                                                 )}
-                                                <Button key="submit" type="submit" variant="contained" disabled={saving === id}>
-                                                    {isEditing
-                                                        ? (saving === id ? 'Saving…' : 'Save')
-                                                        : (saving === id ? 'Logging…' : 'Log')}
-                                                </Button>
-                                            </Box>
-                                        </Box>
-                                    )}
-                                </form>
-                            </Paper>
-                        )
-                    })}
-                </Stack>
-            )}
-        </>
+                                            </form>
+                                        </Paper>
+                                    )
+                                })}
+                            </Stack>
+                        )}
+                    </TodayDropZone>
+                )}
+            </WithDragSidebar>
+
+            <DragOverlay dropAnimation={null}>
+                {dragging && <DragPreview name={dragging.exercise.name} />}
+            </DragOverlay>
+        </DndContext>
     )
 }
