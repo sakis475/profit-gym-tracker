@@ -25,29 +25,11 @@ export default function Login({ onSuccess }: Props) {
         onSuccess?.(data?.user ?? data?.session?.user ?? null)
     }
 
-    async function handleSignUp(e: FormEvent) {
-        e.preventDefault()
-        setError(null)
-        setLoading(true)
-        const { data, error } = await supabase.auth.signUp({ email, password })
-        setLoading(false)
-        if (error) {
-            setError(error.message)
-            return
-        }
-        const signedUser = data?.user ?? data?.session?.user ?? null
-        if (signedUser) {
-            onSuccess?.(signedUser)
-            return
-        }
-        setError('Sign-up successful — please confirm your email before signing in.')
-    }
-
     return (
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
             <Paper sx={{ p: 3, width: 420 }}>
                 <form onSubmit={handleSignIn}>
-                    <Typography variant="h6" gutterBottom>Sign in / Sign up</Typography>
+                    <Typography variant="h6" gutterBottom>Sign in</Typography>
                     {error && <Alert severity="info" sx={{ mb: 2 }}>{error}</Alert>}
                     <TextField
                         label="Email"
@@ -67,14 +49,9 @@ export default function Login({ onSuccess }: Props) {
                         required
                         sx={{ mb: 2 }}
                     />
-                    <Box display="flex" gap={1}>
-                        <Button type="submit" variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} /> : null}>
-                            Sign in
-                        </Button>
-                        <Button type="button" variant="outlined" onClick={handleSignUp} disabled={loading}>
-                            Sign up
-                        </Button>
-                    </Box>
+                    <Button type="submit" variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} /> : null}>
+                        Sign in
+                    </Button>
                 </form>
             </Paper>
         </Box>
