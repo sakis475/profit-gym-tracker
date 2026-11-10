@@ -162,7 +162,15 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
                 </ToggleButtonGroup>
 
                 <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>{DAY_NAMES[day]}</Typography>
-                <NutrientTotals totals={dayTotals} goals={goals} />
+                <NutrientTotals
+                    totals={dayTotals}
+                    goals={goals}
+                    sources={dayItems.map((p) => ({
+                        key: p.foodId,
+                        name: p.foods.name,
+                        nutrients: foodNutrients(p.foods, p.quantity),
+                    }))}
+                />
                 {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
 
                 <Stack spacing={2} sx={{ mt: 2 }}>

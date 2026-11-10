@@ -251,7 +251,15 @@ export default function FoodDiary({ plan, meals, foods, goals, weights, onWeight
                 ) : (
                     <>
                         <Box sx={{ mt: 2 }}>
-                            <NutrientTotals totals={totals} goals={goals} />
+                            <NutrientTotals
+                                totals={totals}
+                                goals={goals}
+                                sources={rows.map((l) => ({
+                                    key: l.foodId ?? l.id,
+                                    name: l.foods?.name ?? 'Deleted food',
+                                    nutrients: logNutrients(l),
+                                }))}
+                            />
                         </Box>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 1.5 }}>
                             <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
