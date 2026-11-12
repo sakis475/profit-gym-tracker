@@ -124,6 +124,7 @@ const en = {
             logging: 'Logging…',
             setInvalid: (n: number) => `Set ${n}: reps must be a whole number, kg a positive number`,
             noSets: 'Enter reps or kg for at least one set',
+            emptyUsesLast: "Empty fields are logged with last time's values.",
             failedToSaveChanges: 'Failed to save changes',
             failedToLog: 'Failed to log workout',
         },

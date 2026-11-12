@@ -280,9 +280,22 @@ export default function Workout() {
         e?.preventDefault()
         setError(exerciseId, null)
 
+        // Editing keeps the workout's createdAt, so it stays the same workout
+        const existing = editing[exerciseId] ? logged[exerciseId] : undefined
+        // A new log takes last time's value (the placeholder) for every field left empty, so a
+        // workout done as before is logged with one press. Editing takes the fields as they are:
+        // emptying one there means taking that value out.
+        const previousBySet = new Map((existing ? [] : last[exerciseId] ?? []).map((w) => [w.set, w]))
+        const orPrevious = (typed: string, previous: number | string | null | undefined) =>
+            typed.trim() !== '' ? typed : previous != null ? String(previous) : ''
+
         // The set number is the row position, empty rows are skipped
         const rows: { set: number; reps: number | null; kg: number | null; notes: string | null }[] = []
-        for (const [i, { reps, kg, notes }] of draftSets(exerciseId).entries()) {
+        for (const [i, row] of draftSets(exerciseId).entries()) {
+            const prev = previousBySet.get(i + 1)
+            const reps = orPrevious(row.reps, prev?.reps)
+            const kg = orPrevious(row.kg, prev?.kg)
+            const notes = orPrevious(row.notes, prev?.notes)
             if (!reps && !kg) continue
             const repsNum = reps ? Number(reps) : null
             const kgNum = kg ? Number(kg) : null
@@ -297,8 +310,6 @@ export default function Workout() {
             return
         }
 
-        // Editing keeps the workout's createdAt, so it stays the same workout
-        const existing = editing[exerciseId] ? logged[exerciseId] : undefined
         setSaving(exerciseId)
         const res = existing
             ? await replaceWorkoutSets(exerciseId, existing[0].createdAt, rows)
@@ -452,6 +463,11 @@ export default function Workout() {
                                                     })}
                                                 </Stack>
 
+                                                {!locked && !isEditing && previous.length > 0 && (
+                                                    <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
+                                                        {w.emptyUsesLast}
+                                                    </Typography>
+                                                )}
                                                 {errors[id] && <Typography color="error" sx={{ mt: 1 }}>{errors[id]}</Typography>}
 
                                                 {locked ? (
