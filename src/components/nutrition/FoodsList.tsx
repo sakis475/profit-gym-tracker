@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
+    Autocomplete,
     Box,
     Button,
     Dialog,
@@ -44,12 +45,15 @@ import {
 } from '../../services/nutrition'
 import {
     FOOD_UNITS,
+    NO_NUTRIENTS,
     NUTRIENTS,
     contentsNutrients,
     defaultQuantity,
     describeFood,
     describeNutrients,
     foodNutrients,
+    quantityUnitLabel,
+    sumNutrients,
     unitPer,
     type FoodContent,
     type NutrientKey,
@@ -80,7 +84,10 @@ type Props = {
 
 type FoodForm = { name: string; unit: string; notes: string } & Record<NutrientKey, string>
 
-const EMPTY_FORM: FoodForm = { name: '', unit: 'g', notes: '', kcal: '', protein: '', carbs: '', fat: '', fiber: '' }
+// A food in the dialog's "Made of" list: already saved (`id`) or added in the dialog, its amount as typed
+type DraftContent = { key: string; id?: string; food: FoodRow; quantity: string }
+
+const EMPTY_FORM: FoodForm ={ name: '', unit: 'g', notes: '', kcal: '', protein: '', carbs: '', fat: '', fiber: '' }
 
 function toForm(food: FoodRow): FoodForm {
     return {
@@ -99,6 +106,8 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
     const [search, setSearch] = useState('')
     const [form, setForm] = useState<FoodForm | null>(null)
     const [editing, setEditing] = useState<FoodRow | null>(null)
+    // What the food in the dialog is made of, as edited there; saved with the food
+    const [madeOf, setMadeOf] = useState<DraftContent[]>([])
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [deleting, setDeleting] = useState<FoodRow | null>(null)
@@ -134,7 +143,30 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
     function openForm(food?: FoodRow) {
         setEditing(food ?? null)
         setForm(food ? toForm(food) : EMPTY_FORM)
+        setMadeOf((food ? contents.get(food.id) ?? [] : []).map((c) => ({
+            key: c.id,
+            id: c.id,
+            food: c.food,
+            quantity: String(c.quantity),
+        })))
         setError(null)
+    }
+
+    // Saves the dialog's "Made of" list for `foodId`: what was taken out, changed or added since it opened
+    async function saveMadeOf(foodId: string) {
+        const before = editing ? contents.get(editing.id) ?? [] : []
+        const kept = new Set(madeOf.flatMap((c) => (c.id ? [c.id] : [])))
+        const results = await Promise.all([
+            ...before.filter((c) => !kept.has(c.id)).map((c) => deleteFoodContent(c.id)),
+            ...madeOf.map(async (c, order) => {
+                const quantity = Number(c.quantity)
+                if (!c.id) return !!(await createFoodContent({ foodId, contentId: c.food.id, quantity, order }))
+                const index = before.findIndex((b) => b.id === c.id)
+                const unchanged = index === order && before[index].quantity === quantity
+                return unchanged || updateFoodContent(c.id, { quantity, order })
+            }),
+        ])
+        return results.every(Boolean)
     }
 
     async function handleSubmit(e: React.FormEvent) {
@@ -150,13 +182,19 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             if (!(value >= 0)) return setError(`${label} must be 0 or more`)
             values[key] = value
         }
+        const badAmount = madeOf.find((c) => !(Number(c.quantity) > 0))
+        if (badAmount) return setError(`The amount of ${badAmount.food.name} must be more than 0`)
 
         const payload = { name: form.name.trim(), unit: form.unit, notes: form.notes.trim() || null, ...values }
         setSaving(true)
         const res = editing ? await updateFood(editing.id, payload) : await createFood(payload)
+        const contentsSaved = !!res && await saveMadeOf(res.id)
         setSaving(false)
         if (!res) return setError(editing ? 'Failed to save food' : 'Failed to create food')
+        // Either way the dialog closes: saving it again could add what was already saved twice.
+        // Opened again, it shows what was saved.
         setForm(null)
+        setListError(contentsSaved ? null : `Saved ${res.name}, but not all of what it is made of. Open it to check.`)
         onChange()
     }
 
@@ -327,35 +365,47 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                                 required
                                 sx={{ mt: 1, mb: 2 }}
                             />
-                            <TextField
-                                select
-                                label="Measured in"
-                                value={form.unit}
-                                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-                                fullWidth
-                                helperText={`The values below are per ${unitPer(form.unit)}. Leave them empty for a food made of other foods, like an omelette.`}
-                                sx={{ mb: 2 }}
-                            >
-                                {FOOD_UNITS.map((u) => (
-                                    <MenuItem key={u.value} value={u.value}>{u.label}</MenuItem>
-                                ))}
-                            </TextField>
-                            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 1.5 }}>
-                                {NUTRIENTS.map(({ key, label, unit }) => (
+                            {/* Made of foods, it comes to what is in it, so its own unit and values don't apply */}
+                            {madeOf.length === 0 && (
+                                <>
                                     <TextField
-                                        key={key}
-                                        label={label}
-                                        type="number"
-                                        value={form[key]}
-                                        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                                        // Left empty, it is saved as 0
-                                        placeholder="0"
-                                        InputLabelProps={{ shrink: true }}
-                                        inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
-                                        InputProps={{ endAdornment: <InputAdornment position="end">{unit}</InputAdornment> }}
-                                    />
-                                ))}
-                            </Box>
+                                        select
+                                        label="Measured in"
+                                        value={form.unit}
+                                        onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                                        fullWidth
+                                        helperText={`The values below are per ${unitPer(form.unit)}. For a food made of other foods, like an omelette, add them below instead.`}
+                                        sx={{ mb: 2 }}
+                                    >
+                                        {FOOD_UNITS.map((u) => (
+                                            <MenuItem key={u.value} value={u.value}>{u.label}</MenuItem>
+                                        ))}
+                                    </TextField>
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: 1.5 }}>
+                                        {NUTRIENTS.map(({ key, label, unit }) => (
+                                            <TextField
+                                                key={key}
+                                                label={label}
+                                                type="number"
+                                                value={form[key]}
+                                                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                                                // Left empty, it is saved as 0
+                                                placeholder="0"
+                                                InputLabelProps={{ shrink: true }}
+                                                inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
+                                                InputProps={{ endAdornment: <InputAdornment position="end">{unit}</InputAdornment> }}
+                                            />
+                                        ))}
+                                    </Box>
+                                </>
+                            )}
+                            <MadeOfEditor
+                                items={madeOf}
+                                // A food with foods in it goes in no other, and a food goes in no food it is in
+                                candidates={foods.filter((f) => f.id !== editing?.id && !contents.has(f.id))}
+                                blockedBy={editing ? parentOf.get(editing.id) ?? null : null}
+                                onChange={setMadeOf}
+                            />
                             <TextField
                                 label="Notes"
                                 value={form.notes}
@@ -508,6 +558,108 @@ function ContentRow({
                     <CloseIcon fontSize="small" />
                 </IconButton>
             </Tooltip>
+        </Box>
+    )
+}
+
+// The "Made of" part of the food dialog: the foods in it with their amounts, to change, take out
+// or add to. Nothing is saved until the dialog is. `blockedBy` is the food this one goes in, which
+// keeps it from having foods in it (one level only).
+function MadeOfEditor({
+    items,
+    candidates,
+    blockedBy,
+    onChange,
+}: {
+    items: DraftContent[]
+    candidates: FoodRow[]
+    blockedBy: FoodRow | null
+    onChange: (items: DraftContent[]) => void
+}) {
+    // The text in the add box, cleared after each pick
+    const [search, setSearch] = useState('')
+    // Keys for the foods added in the dialog, which have no id yet
+    const nextKey = useRef(0)
+
+    const total = sumNutrients(items.map((c) => {
+        const amount = Number(c.quantity)
+        return amount > 0 ? foodNutrients(c.food, amount) : NO_NUTRIENTS
+    }))
+
+    function add(food: FoodRow | null) {
+        if (!food) return
+        nextKey.current += 1
+        onChange([...items, { key: `new:${nextKey.current}`, food, quantity: String(defaultQuantity(food.unit)) }])
+        setSearch('')
+    }
+
+    return (
+        <Box sx={{ mt: items.length > 0 ? 0 : 2 }}>
+            {blockedBy ? (
+                <Typography variant="body2" color="text.secondary">
+                    It goes in {blockedBy.name}, so no foods can go in it.
+                </Typography>
+            ) : (
+                <>
+                    {items.length > 0 && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                            {describeNutrients(total)}
+                        </Typography>
+                    )}
+                    {items.map((c, i) => {
+                        const amount = Number(c.quantity)
+                        return (
+                            <Box key={c.key} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="body2" noWrap>{c.food.name}</Typography>
+                                    <Typography variant="caption" color="text.secondary" component="div">
+                                        {amount > 0 ? describeNutrients(foodNutrients(c.food, amount)) : 'Enter an amount'}
+                                    </Typography>
+                                </Box>
+                                <TextField
+                                    size="small"
+                                    type="number"
+                                    value={c.quantity}
+                                    error={!(amount > 0)}
+                                    onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
+                                    inputProps={{ min: 0, step: 'any', inputMode: 'decimal', 'aria-label': `Amount of ${c.food.name}` }}
+                                    InputProps={{ endAdornment: <InputAdornment position="end">{quantityUnitLabel(c.food.unit)}</InputAdornment> }}
+                                    sx={{ width: 120, flexShrink: 0 }}
+                                />
+                                <Tooltip title="Take it out">
+                                    <IconButton
+                                        size="small"
+                                        aria-label={`Take ${c.food.name} out`}
+                                        onClick={() => onChange(items.filter((_, j) => j !== i))}
+                                    >
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                        )
+                    })}
+                    <Autocomplete
+                        options={candidates}
+                        value={null}
+                        inputValue={search}
+                        onInputChange={(_, value, reason) => {
+                            // Picking a food clears the box rather than filling it with the name
+                            if (reason !== 'reset') setSearch(value)
+                        }}
+                        onChange={(_, food) => add(food)}
+                        getOptionLabel={(f) => f.name}
+                        isOptionEqualToValue={(a, b) => a.id === b.id}
+                        renderInput={(params) => (
+                            <TextField
+                                {...params}
+                                size="small"
+                                placeholder={items.length > 0 ? 'Add another food' : 'Add a food, e.g. eggs in an omelette'}
+                            />
+                        )}
+                        sx={{ mt: 1 }}
+                    />
+                </>
+            )}
         </Box>
     )
 }
