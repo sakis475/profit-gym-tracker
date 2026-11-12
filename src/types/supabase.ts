@@ -99,6 +99,54 @@ export type Database = {
         }
         Relationships: []
       }
+      food_contents: {
+        Row: {
+          contentId: string
+          createdAt: string
+          disabledAt: string | null
+          foodId: string
+          id: string
+          order: number | null
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          contentId: string
+          createdAt?: string
+          disabledAt?: string | null
+          foodId: string
+          id?: string
+          order?: number | null
+          quantity: number
+          user_id?: string
+        }
+        Update: {
+          contentId?: string
+          createdAt?: string
+          disabledAt?: string | null
+          foodId?: string
+          id?: string
+          order?: number | null
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_contents_contentId_fkey"
+            columns: ["contentId"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_contents_foodId_fkey"
+            columns: ["foodId"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       food_log: {
         Row: {
           carbs: number
@@ -111,6 +159,7 @@ export type Database = {
           id: string
           kcal: number
           mealId: string
+          parentId: string | null
           planId: string | null
           protein: number
           quantity: number
@@ -127,6 +176,7 @@ export type Database = {
           id?: string
           kcal?: number
           mealId: string
+          parentId?: string | null
           planId?: string | null
           protein?: number
           quantity: number
@@ -143,6 +193,7 @@ export type Database = {
           id?: string
           kcal?: number
           mealId?: string
+          parentId?: string | null
           planId?: string | null
           protein?: number
           quantity?: number
@@ -161,6 +212,13 @@ export type Database = {
             columns: ["mealId"]
             isOneToOne: false
             referencedRelation: "meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_log_parentId_fkey"
+            columns: ["parentId"]
+            isOneToOne: false
+            referencedRelation: "food_log"
             referencedColumns: ["id"]
           },
           {
@@ -226,6 +284,7 @@ export type Database = {
           id: string
           mealId: string
           order: number | null
+          parentId: string | null
           quantity: number
           user_id: string
         }
@@ -237,6 +296,7 @@ export type Database = {
           id?: string
           mealId: string
           order?: number | null
+          parentId?: string | null
           quantity: number
           user_id?: string
         }
@@ -248,6 +308,7 @@ export type Database = {
           id?: string
           mealId?: string
           order?: number | null
+          parentId?: string | null
           quantity?: number
           user_id?: string
         }
@@ -264,6 +325,13 @@ export type Database = {
             columns: ["mealId"]
             isOneToOne: false
             referencedRelation: "meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meal_plan_parentId_fkey"
+            columns: ["parentId"]
+            isOneToOne: false
+            referencedRelation: "meal_plan"
             referencedColumns: ["id"]
           },
         ]

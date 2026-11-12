@@ -22,6 +22,10 @@ export type FoodRow = Database['public']['Tables']['foods']['Row']
 export type FoodInsert = Database['public']['Tables']['foods']['Insert']
 export type FoodUpdate = Database['public']['Tables']['foods']['Update']
 
+export type FoodContentRow = Database['public']['Tables']['food_contents']['Row']
+export type FoodContentInsert = Database['public']['Tables']['food_contents']['Insert']
+export type FoodContentUpdate = Database['public']['Tables']['food_contents']['Update']
+
 export type MealRow = Database['public']['Tables']['meals']['Row']
 export type MealInsert = Database['public']['Tables']['meals']['Insert']
 export type MealUpdate = Database['public']['Tables']['meals']['Update']

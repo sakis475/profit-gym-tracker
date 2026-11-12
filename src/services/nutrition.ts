@@ -1,6 +1,9 @@
 import { supabase } from '../lib/supabase'
 import type {
   BodyWeightRow,
+  FoodContentInsert,
+  FoodContentRow,
+  FoodContentUpdate,
   FoodInsert,
   FoodLogInsert,
   FoodLogUpdate,
@@ -63,6 +66,50 @@ export async function updateFood(id: string, updates: FoodUpdate): Promise<FoodR
 
 export async function deleteFood(id: string): Promise<FoodRow | null> {
   return updateFood(id, { disabledAt: now() })
+}
+
+// What goes in the foods, of every food, in order
+export async function getFoodContents(): Promise<FoodContentRow[] | null> {
+  const { data, error } = await supabase
+    .from('food_contents')
+    .select('*')
+    .is('disabledAt', null)
+    .order('order', { ascending: true, nullsFirst: false })
+    .order('createdAt', { ascending: true })
+
+  if (error) {
+    console.error('Read food contents error:', error)
+    return null
+  }
+
+  return data
+}
+
+// Returns the new row's id
+export async function createFoodContent(content: FoodContentInsert): Promise<string | null> {
+  const { data, error } = await supabase.from('food_contents').insert(content).select('id').single()
+
+  if (error) {
+    console.error('Create food content error:', error)
+    return null
+  }
+
+  return data.id
+}
+
+export async function updateFoodContent(id: string, updates: FoodContentUpdate): Promise<boolean> {
+  const { data, error } = await supabase.from('food_contents').update(updates).eq('id', id).select('id')
+
+  if (error || data.length !== 1) {
+    console.error('Update food content error:', error ?? 'row not updated')
+    return false
+  }
+
+  return true
+}
+
+export async function deleteFoodContent(id: string): Promise<boolean> {
+  return updateFoodContent(id, { disabledAt: now() })
 }
 
 // Meals
@@ -162,6 +209,19 @@ export async function createPlanItem(item: MealPlanInsert): Promise<string | nul
   return data.id
 }
 
+// Several items at once, e.g. what goes in a food. Returns their ids, in the order given.
+export async function createPlanItems(items: MealPlanInsert[]): Promise<string[] | null> {
+  if (items.length === 0) return []
+  const { data, error } = await supabase.from('meal_plan').insert(items).select('id')
+
+  if (error) {
+    console.error('Create meal plan items error:', error)
+    return null
+  }
+
+  return data.map((row) => row.id)
+}
+
 export async function updatePlanItem(id: string, updates: MealPlanUpdate): Promise<boolean> {
   const { data, error } = await supabase.from('meal_plan').update(updates).eq('id', id).select('id')
 
@@ -173,8 +233,21 @@ export async function updatePlanItem(id: string, updates: MealPlanUpdate): Promi
   return true
 }
 
+// The same change to everything put in a planned food, e.g. its meal when it moves
+export async function updatePlanContents(parentId: string, updates: MealPlanUpdate): Promise<boolean> {
+  const { error } = await supabase.from('meal_plan').update(updates).eq('parentId', parentId).is('disabledAt', null)
+
+  if (error) {
+    console.error('Update meal plan contents error:', error)
+    return false
+  }
+
+  return true
+}
+
+// What was put in it goes with it
 export async function deletePlanItem(id: string): Promise<boolean> {
-  return updatePlanItem(id, { disabledAt: now() })
+  return (await updatePlanContents(id, { disabledAt: now() })) && updatePlanItem(id, { disabledAt: now() })
 }
 
 // Goals
@@ -256,8 +329,21 @@ export async function updateFoodLog(id: string, updates: FoodLogUpdate): Promise
   return true
 }
 
+// The same change to everything put in a logged food, e.g. its meal when it moves
+export async function updateFoodLogContents(parentId: string, updates: FoodLogUpdate): Promise<boolean> {
+  const { error } = await supabase.from('food_log').update(updates).eq('parentId', parentId).is('disabledAt', null)
+
+  if (error) {
+    console.error('Update food log contents error:', error)
+    return false
+  }
+
+  return true
+}
+
+// What was put in it goes with it
 export async function deleteFoodLog(id: string): Promise<boolean> {
-  return updateFoodLog(id, { disabledAt: now() })
+  return (await updateFoodLogContents(id, { disabledAt: now() })) && updateFoodLog(id, { disabledAt: now() })
 }
 
 // Body weight

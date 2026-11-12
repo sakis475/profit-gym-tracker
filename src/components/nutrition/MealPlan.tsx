@@ -11,6 +11,7 @@ import {
     TextField,
     ToggleButton,
     ToggleButtonGroup,
+    Tooltip,
     Typography,
 } from '@mui/material'
 import {
@@ -20,6 +21,7 @@ import {
     Delete as DeleteIcon,
     DragIndicator as DragIndicatorIcon,
     Edit as EditIcon,
+    PlaylistAdd as AddIntoIcon,
     Restaurant as MealsIcon,
 } from '@mui/icons-material'
 import {
@@ -36,17 +38,39 @@ import {
 import {
     createMeal,
     createPlanItem,
+    createPlanItems,
     deleteMeal,
     deletePlanItem,
     reorderMeals,
     updateMeal,
+    updatePlanContents,
     updatePlanItem,
 } from '../../services/nutrition'
-import { defaultQuantity, describeNutrients, foodNutrients, formatNutrient, sumNutrients } from '../../lib/nutrition'
+import {
+    defaultQuantity,
+    describeNutrients,
+    foodNutrients,
+    formatNutrient,
+    sumNutrients,
+    type FoodContent,
+} from '../../lib/nutrition'
 import type { FoodRow, MealPlanWithFood, MealRow, NutritionGoalsRow } from '../../types/entityTypes'
 import NutrientTotals from './NutrientTotals'
 import FoodEntryDialog, { type FoodEntry } from './FoodEntryDialog'
-import { MealDropZone, QuantityInput, WithFoodSidebar, type FoodDragData } from './FoodDnd'
+import {
+    ContentsList,
+    IntoDropZone,
+    MadeOfNames,
+    MadeOfToggle,
+    MealDropZone,
+    QuantityInput,
+    WithFoodSidebar,
+    type DropTarget,
+    type FoodDragData,
+    type MadeOf,
+} from './FoodDnd'
+import { dropCollision } from './dropCollision'
+import { useOpenContents } from './useOpenContents'
 import { DragPreview } from '../DragSidebar'
 
 // Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay()
@@ -59,16 +83,23 @@ type Props = {
     plan: MealPlanWithFood[]
     meals: MealRow[]
     foods: FoodRow[]
+    // What goes in each food, by its id
+    contents: Map<string, FoodContent[]>
     goals: NutritionGoalsRow | null
     onChange: () => void
 }
 
-type EntryDialog = { item?: MealPlanWithFood; mealId?: string }
+// Add a food to a meal or put it in another food (`into`), or change a planned food
+type EntryDialog = { item?: MealPlanWithFood; mealId?: string; into?: MealPlanWithFood }
 
-// What is being dragged: a food from the list, or a planned item moving to another meal
+// What is being dragged: a food from the list, or a planned food moving to another meal or food
 type DragData = FoodDragData | { kind: 'plan'; item: MealPlanWithFood }
 
-export default function MealPlan({ plan, meals, foods, goals, onChange }: Props) {
+function itemsNutrients(items: MealPlanWithFood[]) {
+    return sumNutrients(items.map((p) => foodNutrients(p.foods, p.quantity)))
+}
+
+export default function MealPlan({ plan, meals, foods, contents, goals, onChange }: Props) {
     const [day, setDay] = useState(() => new Date().getDay())
     const [entry, setEntry] = useState<EntryDialog | null>(null)
     const [removing, setRemoving] = useState<MealPlanWithFood | null>(null)
@@ -78,6 +109,8 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
     const [dragging, setDragging] = useState<DragData | null>(null)
     // The item just dropped in, whose amount field takes the focus once it shows up
     const [focusId, setFocusId] = useState<string | null>(null)
+    // Planned foods made of foods whose list of what is in them is open, by item id
+    const openContents = useOpenContents()
     const sensors = useSensors(
         // A few pixels of movement before a drag starts, so clicks still work
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -85,15 +118,51 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
     )
 
     const dayItems = plan.filter((p) => p.day === day)
-    const dayTotals = sumNutrients(dayItems.map((p) => foodNutrients(p.foods, p.quantity)))
+    const dayById = new Map(dayItems.map((p) => [p.id, p]))
+    // A food on its own in its meal, not put in another
+    const isTop = (p: MealPlanWithFood) => !p.parentId || !dayById.has(p.parentId)
+    const contentsOf = (id: string) => dayItems.filter((p) => p.parentId === id)
+    // A food with foods in it comes to what is in it, so only the foods without any count
+    const counts = (p: MealPlanWithFood) => !dayItems.some((c) => c.parentId === p.id)
+    const counted = dayItems.filter(counts)
+    const dayTotals = itemsNutrients(counted)
 
-    async function saveEntry({ mealId, foodId, quantity }: FoodEntry) {
+    // Adds a food to a meal, or puts it in another. A food on its own starts with a copy of what
+    // goes in it (set in Foods), which can then be changed for this one alone. Returns the new item's id.
+    async function addFood(food: FoodRow, quantity: number, mealId: string, into: MealPlanWithFood | null) {
+        const order = into ? contentsOf(into.id).length : dayItems.filter((p) => p.mealId === mealId && isTop(p)).length
+        const id = await createPlanItem({ day, mealId, parentId: into?.id ?? null, foodId: food.id, quantity, order })
+        if (!id) return null
+
+        // One level only, so a food put in another comes without its contents
+        const kept = into ? [] : contents.get(food.id) ?? []
+        if (kept.length > 0) {
+            const ids = await createPlanItems(kept.map((c, i) => ({
+                day,
+                mealId,
+                parentId: id,
+                foodId: c.food.id,
+                quantity: c.quantity,
+                order: i,
+            })))
+            if (!ids) setError(`Added ${food.name}, but not the foods that go in it`)
+        }
+        return id
+    }
+
+    async function saveEntry({ mealId, foodId, quantity }: FoodEntry, food: FoodRow) {
         const item = entry?.item
-        // A new item goes last in its meal
-        const ok = item
-            ? await updatePlanItem(item.id, { mealId, foodId, quantity })
-            : !!(await createPlanItem({ day, mealId, foodId, quantity, order: dayItems.filter((p) => p.mealId === mealId).length }))
-        if (!ok) return 'Failed to save'
+        if (item) {
+            const moved = mealId !== item.mealId
+            // Moved to another meal, it comes out of the food it was in, and what is in it goes along
+            const ok = await updatePlanItem(item.id, { mealId, foodId, quantity, ...(moved && { parentId: null }) })
+                && (!moved || await updatePlanContents(item.id, { mealId }))
+            if (!ok) return 'Failed to save'
+        } else {
+            const into = entry?.into ?? null
+            if (!(await addFood(food, quantity, into?.mealId ?? mealId, into))) return 'Failed to save'
+            if (into) openContents.show(into.id)
+        }
         setEntry(null)
         onChange()
         return null
@@ -111,33 +180,79 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
 
     async function handleDragEnd({ active, over }: DragEndEvent) {
         setDragging(null)
-        const mealId = over?.data.current?.mealId as string | undefined
+        const target = over?.data.current as DropTarget | undefined
         const data = active.data.current as DragData | undefined
-        if (!mealId || !data) return
+        if (!target || !data) return
 
-        // Either way it goes last in the meal it is dropped on
-        const order = dayItems.filter((p) => p.mealId === mealId).length
+        const { mealId } = target
+        const into = target.intoKey ? dayById.get(target.intoKey) ?? null : null
         setError(null)
         if (data.kind === 'food') {
-            const id = await createPlanItem({ day, mealId, foodId: data.food.id, quantity: defaultQuantity(data.food.unit), order })
+            // One level only
+            if (into && contents.has(data.food.id)) {
+                return setError(`${data.food.name} has foods in it, so it can't go in another food`)
+            }
+            const id = await addFood(data.food, defaultQuantity(data.food.unit), mealId, into)
             if (!id) return setError(`Failed to add ${data.food.name}`)
             setFocusId(id)
         } else {
-            if (data.item.mealId === mealId) return
-            const ok = await updatePlanItem(data.item.id, { mealId, order })
-            if (!ok) return setError(`Failed to move ${data.item.foods.name}`)
+            const { item } = data
+            let ok: boolean
+            if (into) {
+                if (into.id === item.id || into.id === item.parentId) return
+                // One level only
+                if (contentsOf(item.id).length > 0) {
+                    return setError(`${item.foods.name} has foods in it, so it can't go in another food`)
+                }
+                ok = await updatePlanItem(item.id, { mealId, parentId: into.id, order: contentsOf(into.id).length })
+            } else {
+                if (item.mealId === mealId && isTop(item)) return
+                const order = dayItems.filter((p) => p.mealId === mealId && isTop(p)).length
+                ok = await updatePlanItem(item.id, { mealId, parentId: null, order })
+                    && await updatePlanContents(item.id, { mealId })
+            }
+            if (!ok) return setError(`Failed to move ${item.foods.name}`)
         }
+        // What was put in shows
+        if (into) openContents.show(into.id)
         onChange()
     }
+
+    // A food on its own comes with what is in it (`inside`); a food inside another without
+    function renderItem(item: MealPlanWithFood, inside?: MealPlanWithFood[]) {
+        return (
+            <PlanItemRow
+                // Keyed on the amount too, so a change from the edit dialog resets the field
+                key={`${item.id}:${item.quantity}`}
+                item={item}
+                dense={!inside}
+                madeOf={inside && inside.length > 0 ? {
+                    nutrients: itemsNutrients(inside),
+                    names: inside.map((c) => c.foods.name),
+                    open: openContents.isOpen(item.id),
+                    onToggle: () => openContents.toggle(item.id),
+                } : undefined}
+                autoFocus={item.id === focusId}
+                onBlurred={() => setFocusId(null)}
+                onSaved={onChange}
+                onAddInto={inside ? () => setEntry({ into: item }) : undefined}
+                onEdit={() => setEntry({ item })}
+                onRemove={() => { setError(null); setRemoving(item) }}
+            />
+        )
+    }
+
+    const removingContents = removing ? contentsOf(removing.id).length : 0
 
     return (
         <DndContext
             sensors={sensors}
+            collisionDetection={dropCollision}
             onDragStart={({ active }: DragStartEvent) => setDragging((active.data.current as DragData | undefined) ?? null)}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setDragging(null)}
         >
-            <WithFoodSidebar foods={foods}>
+            <WithFoodSidebar foods={foods} contents={contents}>
                 <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                     <Button startIcon={<MealsIcon />} onClick={() => setMealsOpen(true)}>Meals</Button>
                     <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEntry({})}>Add food</Button>
@@ -165,7 +280,7 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
                 <NutrientTotals
                     totals={dayTotals}
                     goals={goals}
-                    sources={dayItems.map((p) => ({
+                    sources={counted.map((p) => ({
                         key: p.foodId,
                         name: p.foods.name,
                         nutrients: foodNutrients(p.foods, p.quantity),
@@ -176,7 +291,7 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
                 <Stack spacing={2} sx={{ mt: 2 }}>
                     {meals.map((meal) => {
                         const items = dayItems.filter((p) => p.mealId === meal.id)
-                        const totals = sumNutrients(items.map((p) => foodNutrients(p.foods, p.quantity)))
+                        const totals = itemsNutrients(items.filter(counts))
                         return (
                             <MealDropZone key={meal.id} mealId={meal.id} dragging={!!dragging}>
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 2 }}>
@@ -187,18 +302,19 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
                                         </Typography>
                                     )}
                                 </Box>
-                                {items.map((item) => (
-                                    <PlanItemRow
-                                        // Keyed on the amount too, so a change from the edit dialog resets the field
-                                        key={`${item.id}:${item.quantity}`}
-                                        item={item}
-                                        autoFocus={item.id === focusId}
-                                        onBlurred={() => setFocusId(null)}
-                                        onSaved={onChange}
-                                        onEdit={() => setEntry({ item })}
-                                        onRemove={() => { setError(null); setRemoving(item) }}
-                                    />
-                                ))}
+                                {items.filter(isTop).map((item) => {
+                                    const inside = contentsOf(item.id)
+                                    return (
+                                        <IntoDropZone key={item.id} mealId={meal.id} intoKey={item.id}>
+                                            {renderItem(item, inside)}
+                                            {inside.length > 0 && (
+                                                <ContentsList open={openContents.isOpen(item.id)}>
+                                                    {inside.map((c) => renderItem(c))}
+                                                </ContentsList>
+                                            )}
+                                        </IntoDropZone>
+                                    )
+                                })}
                                 {items.length === 0 && (
                                     // Only where the food list is shown
                                     <Typography variant="body2" color="text.secondary" sx={{ py: 1, display: { xs: 'none', md: 'block' } }}>
@@ -223,13 +339,16 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
 
             {entry && (
                 <FoodEntryDialog
-                    title={entry.item ? 'Edit planned food' : `Add to ${DAY_NAMES[day]}`}
+                    title={entry.item ? 'Edit planned food' : entry.into ? `Add to ${entry.into.foods.name}` : `Add to ${DAY_NAMES[day]}`}
                     submitLabel={entry.item ? 'Save' : 'Add'}
                     meals={meals}
-                    foods={foods}
+                    // A food with foods in it goes in no other
+                    foods={entry.into ? foods.filter((f) => !contents.has(f.id)) : foods}
+                    contents={contents}
+                    hideMeal={!!entry.into}
                     initial={entry.item
                         ? { mealId: entry.item.mealId, foodId: entry.item.foodId, quantity: entry.item.quantity }
-                        : { mealId: entry.mealId }}
+                        : { mealId: entry.into?.mealId ?? entry.mealId }}
                     onClose={() => setEntry(null)}
                     onSubmit={saveEntry}
                 />
@@ -238,7 +357,11 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
             <Dialog open={!!removing} onClose={() => setRemoving(null)}>
                 <DialogTitle>Remove from plan</DialogTitle>
                 <DialogContent>
-                    <Typography>Remove "{removing?.foods.name}" from {DAY_NAMES[day]}?</Typography>
+                    <Typography>
+                        Remove "{removing?.foods.name}"
+                        {removingContents > 0 && ` and the ${removingContents === 1 ? 'food' : `${removingContents} foods`} in it`}
+                        {' '}from {DAY_NAMES[day]}?
+                    </Typography>
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
@@ -254,19 +377,28 @@ export default function MealPlan({ plan, meals, foods, goals, onChange }: Props)
     )
 }
 
-// A planned food with its amount editable in place; the handle drags it to another meal
+// A planned food with its amount editable in place; the handle drags it to another meal, or into
+// another food. Made of foods (`madeOf`), it shows their sum and names instead and has no amount
+// of its own. `dense` is for a food inside another.
 function PlanItemRow({
     item,
+    madeOf,
+    dense,
     autoFocus,
     onBlurred,
     onSaved,
+    onAddInto,
     onEdit,
     onRemove,
 }: {
     item: MealPlanWithFood
+    madeOf?: MadeOf
+    dense?: boolean
     autoFocus: boolean
     onBlurred: () => void
     onSaved: () => void
+    // For a food on its own, which other foods can be put in
+    onAddInto?: () => void
     onEdit: () => void
     onRemove: () => void
 }) {
@@ -294,32 +426,52 @@ function PlanItemRow({
     }
 
     return (
-        <Box ref={setNodeRef} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.75, opacity: isDragging ? 0.4 : 1 }}>
+        <Box
+            ref={setNodeRef}
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, py: dense ? 0.25 : 0.75, opacity: isDragging ? 0.4 : 1 }}
+        >
             <Box
                 {...attributes}
                 {...listeners}
-                aria-label={`Drag ${item.foods.name} to another meal`}
+                aria-label={`Drag ${item.foods.name} to another meal or food`}
                 sx={{ display: 'flex', color: 'text.secondary', cursor: 'grab', touchAction: 'none' }}
             >
                 <DragIndicatorIcon fontSize="small" />
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography noWrap>{item.foods.name}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                    {describeNutrients(foodNutrients(item.foods, shownQuantity))}
+                <Typography noWrap variant={dense ? 'body2' : 'body1'}>{item.foods.name}</Typography>
+                {madeOf && <MadeOfNames names={madeOf.names} />}
+                <Typography variant={dense ? 'caption' : 'body2'} color="text.secondary" component="div">
+                    {/* Made of foods, it comes to what is in it; its own amount and values don't apply */}
+                    {describeNutrients(madeOf?.nutrients ?? foodNutrients(item.foods, shownQuantity))}
                 </Typography>
             </Box>
-            <QuantityInput
-                value={quantity}
-                unit={item.foods.unit}
-                label={`Amount of ${item.foods.name}`}
-                autoFocus={autoFocus}
-                disabled={saving}
-                error={failed}
-                onChange={setQuantity}
-                onCommit={save}
-                onCancel={() => setQuantity(String(item.quantity))}
-            />
+            {madeOf ? (
+                <MadeOfToggle name={item.foods.name} madeOf={madeOf} />
+            ) : (
+                <QuantityInput
+                    value={quantity}
+                    unit={item.foods.unit}
+                    label={`Amount of ${item.foods.name}`}
+                    autoFocus={autoFocus}
+                    disabled={saving}
+                    error={failed}
+                    dense={dense}
+                    onChange={setQuantity}
+                    onCommit={save}
+                    onCancel={() => setQuantity(String(item.quantity))}
+                />
+            )}
+            {onAddInto ? (
+                <Tooltip title={`Put a food in ${item.foods.name}`}>
+                    <IconButton size="small" aria-label={`Put a food in ${item.foods.name}`} onClick={onAddInto}>
+                        <AddIntoIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            ) : (
+                // Keeps the amounts lined up with the rows that have this button
+                <Box sx={{ width: 34, flexShrink: 0 }} />
+            )}
             <IconButton size="small" aria-label={`Edit ${item.foods.name}`} onClick={onEdit}>
                 <EditIcon fontSize="small" />
             </IconButton>

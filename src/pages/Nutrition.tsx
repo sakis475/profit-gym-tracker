@@ -1,8 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Box, Tab, Tabs, Typography } from '@mui/material'
-import { getBodyWeights, getFoods, getGoals, getMealPlan, getMeals } from '../services/nutrition'
+import { getBodyWeights, getFoodContents, getFoods, getGoals, getMealPlan, getMeals } from '../services/nutrition'
 import { useTabParam } from '../lib/useTabParam'
-import type { BodyWeightRow, FoodRow, MealPlanWithFood, MealRow, NutritionGoalsRow } from '../types/entityTypes'
+import { contentsByFood, type FoodContent } from '../lib/nutrition'
+import type {
+    BodyWeightRow,
+    FoodContentRow,
+    FoodRow,
+    MealPlanWithFood,
+    MealRow,
+    NutritionGoalsRow,
+} from '../types/entityTypes'
 import FoodDiary from '../components/nutrition/FoodDiary'
 import MealPlan from '../components/nutrition/MealPlan'
 import FoodsList from '../components/nutrition/FoodsList'
@@ -15,9 +23,12 @@ type Data = {
     plan: MealPlanWithFood[]
     meals: MealRow[]
     foods: FoodRow[]
+    foodContents: FoodContentRow[]
     goals: NutritionGoalsRow | null
     weights: BodyWeightRow[]
 }
+
+const NO_CONTENTS = new Map<string, FoodContent[]>()
 
 export default function Nutrition() {
     const [view, setView] = useTabParam(TABS)
@@ -29,11 +40,15 @@ export default function Nutrition() {
     useEffect(() => {
         let cancelled = false
 
-        Promise.all([getMealPlan(), getMeals(), getFoods(), getGoals(), getBodyWeights()]).then(
-            ([plan, meals, foods, goals, weights]) => {
+        Promise.all([getMealPlan(), getMeals(), getFoods(), getFoodContents(), getGoals(), getBodyWeights()]).then(
+            ([plan, meals, foods, foodContents, goals, weights]) => {
                 if (cancelled) return
                 // getGoals gives null both for no goals yet and for an error; either way there are no goals to show
-                setData(plan && meals && foods && weights ? { plan, meals, foods, goals, weights } : null)
+                setData(
+                    plan && meals && foods && foodContents && weights
+                        ? { plan, meals, foods, foodContents, goals, weights }
+                        : null
+                )
             }
         )
 
@@ -43,6 +58,9 @@ export default function Nutrition() {
     }, [version])
 
     const reload = () => setVersion((v) => v + 1)
+
+    // What goes in each food, by its id
+    const contents = useMemo(() => (data ? contentsByFood(data.foodContents, data.foods) : NO_CONTENTS), [data])
 
     return (
         <>
@@ -66,14 +84,22 @@ export default function Nutrition() {
                     plan={data.plan}
                     meals={data.meals}
                     foods={data.foods}
+                    contents={contents}
                     goals={data.goals}
                     weights={data.weights}
                     onWeightsChange={reload}
                 />
             ) : view === 'plan' ? (
-                <MealPlan plan={data.plan} meals={data.meals} foods={data.foods} goals={data.goals} onChange={reload} />
+                <MealPlan
+                    plan={data.plan}
+                    meals={data.meals}
+                    foods={data.foods}
+                    contents={contents}
+                    goals={data.goals}
+                    onChange={reload}
+                />
             ) : view === 'foods' ? (
-                <FoodsList foods={data.foods} onChange={reload} />
+                <FoodsList foods={data.foods} contents={contents} onChange={reload} />
             ) : (
                 <NutritionProgress goals={data.goals} weights={data.weights} onGoalsChange={reload} onWeightsChange={reload} />
             )}

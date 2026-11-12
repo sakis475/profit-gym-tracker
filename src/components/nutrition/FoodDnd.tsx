@@ -1,7 +1,15 @@
 import { useMemo } from 'react'
-import { InputAdornment, Paper, TextField } from '@mui/material'
+import { Box, Button, Collapse, InputAdornment, Paper, TextField, Typography } from '@mui/material'
+import { ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { useDroppable } from '@dnd-kit/core'
-import { formatNutrient, quantityUnitLabel, unitPer } from '../../lib/nutrition'
+import {
+    contentsNutrients,
+    formatNutrient,
+    quantityUnitLabel,
+    unitPer,
+    type FoodContent,
+    type Nutrients,
+} from '../../lib/nutrition'
 import type { FoodRow } from '../../types/entityTypes'
 import { WithDragSidebar, type SidebarItem } from '../DragSidebar'
 
@@ -12,27 +20,52 @@ import { WithDragSidebar, type SidebarItem } from '../DragSidebar'
 export type FoodDragData = { kind: 'food'; food: FoodRow }
 
 // The food list on the left of `children`, or nothing but `children` on a narrow screen
-export function WithFoodSidebar({ foods, children }: { foods: FoodRow[]; children: React.ReactNode }) {
+export function WithFoodSidebar({
+    foods,
+    contents,
+    title = 'Foods: drag onto a meal, or onto a food to put it in',
+    children,
+}: {
+    foods: FoodRow[]
+    // What goes in each food, by its id
+    contents: Map<string, FoodContent[]>
+    title?: string
+    children: React.ReactNode
+}) {
     const items = useMemo<SidebarItem[]>(
-        () => foods.map((food) => ({
-            dragId: `food:${food.id}`,
-            name: food.name,
-            detail: `per ${unitPer(food.unit)} · ${formatNutrient(food.kcal, 'kcal')} kcal · P ${formatNutrient(food.protein, 'protein')} g`,
-            data: { kind: 'food', food } satisfies FoodDragData,
-        })),
-        [foods]
+        () => foods.map((food) => {
+            const inside = contents.get(food.id) ?? []
+            // With foods in it, it comes to what is in it; its own unit and values don't apply
+            const values = inside.length > 0 ? contentsNutrients(inside) : food
+            const per = inside.length > 0 ? `${inside.length} ${inside.length === 1 ? 'food' : 'foods'} in it` : `per ${unitPer(food.unit)}`
+            return {
+                dragId: `food:${food.id}`,
+                name: food.name,
+                detail: `${per} · ${formatNutrient(values.kcal, 'kcal')} kcal · P ${formatNutrient(values.protein, 'protein')} g`,
+                data: { kind: 'food', food } satisfies FoodDragData,
+            }
+        }),
+        [foods, contents]
     )
 
     return (
-        <WithDragSidebar title="Foods: drag onto a meal" items={items} emptyText="No foods yet. Add them in the Foods tab.">
+        <WithDragSidebar
+            title={title}
+            items={items}
+            emptyText="No foods yet. Add them in the Foods tab."
+        >
             {children}
         </WithDragSidebar>
     )
 }
 
-// A meal's card that takes drops; the drop's `over.data.current.mealId` says which meal
+// Where something is dropped, as `over.data.current`: a meal, or a food in it (`intoKey`, which
+// the page maps back to that food) to put it in
+export type DropTarget = { mealId: string; intoKey?: string }
+
+// A meal's card that takes drops
 export function MealDropZone({ mealId, dragging, children }: { mealId: string; dragging: boolean; children: React.ReactNode }) {
-    const { setNodeRef, isOver } = useDroppable({ id: `meal:${mealId}`, data: { mealId } })
+    const { setNodeRef, isOver } = useDroppable({ id: `meal:${mealId}`, data: { mealId } satisfies DropTarget })
 
     return (
         <Paper
@@ -51,6 +84,67 @@ export function MealDropZone({ mealId, dragging, children }: { mealId: string; d
     )
 }
 
+// A food of a meal together with what was put in it. A food dropped here is put in it.
+export function IntoDropZone({ mealId, intoKey, children }: { mealId: string; intoKey: string; children: React.ReactNode }) {
+    const { setNodeRef, isOver } = useDroppable({ id: `into:${intoKey}`, data: { mealId, intoKey } satisfies DropTarget })
+
+    return (
+        <Box
+            ref={setNodeRef}
+            sx={{
+                borderRadius: 1,
+                outline: '2px solid',
+                outlineColor: isOver ? 'primary.main' : 'transparent',
+                bgcolor: isOver ? 'action.hover' : undefined,
+                transition: 'outline-color 120ms, background-color 120ms',
+            }}
+        >
+            {children}
+        </Box>
+    )
+}
+
+// The foods put in another, indented under it, shown while `open`
+export function ContentsList({ open, children }: { open: boolean; children: React.ReactNode }) {
+    return (
+        <Collapse in={open}>
+            <Box sx={{ ml: 2, pl: 1.5, borderLeft: 2, borderColor: 'divider' }}>{children}</Box>
+        </Collapse>
+    )
+}
+
+// A food made of foods, as its row shows it: what it comes to, the names of what is in it, and
+// whether the list of them is open
+export type MadeOf = { nutrients: Nutrients; names: string[]; open: boolean; onToggle: () => void }
+
+// What is in a food, by name, under its name: "Γιαούρτι στραγγιστό 2%, Βρώμη, Μέλι"
+export function MadeOfNames({ names }: { names: string[] }) {
+    return (
+        <Typography variant="caption" color="text.secondary" noWrap component="div">
+            {names.join(', ')}
+        </Typography>
+    )
+}
+
+// Opens and closes the list of what is in a food. It takes the place of the amount, which a food
+// made of foods does not have, so it is as wide.
+export function MadeOfToggle({ name, madeOf }: { name: string; madeOf: MadeOf }) {
+    const count = madeOf.names.length
+    return (
+        <Button
+            size="small"
+            color="inherit"
+            onClick={madeOf.onToggle}
+            aria-expanded={madeOf.open}
+            aria-label={`${madeOf.open ? 'Hide' : 'Show'} what is in ${name}`}
+            endIcon={<ExpandMoreIcon sx={{ transition: 'transform 150ms', transform: madeOf.open ? 'rotate(180deg)' : 'none' }} />}
+            sx={{ width: 120, flexShrink: 0, color: 'text.secondary', textTransform: 'none' }}
+        >
+            {count} {count === 1 ? 'food' : 'foods'}
+        </Button>
+    )
+}
+
 // An amount edited in place: Enter or leaving the field commits it, Escape puts the old one back
 export function QuantityInput({
     value,
@@ -60,6 +154,7 @@ export function QuantityInput({
     disabled,
     error,
     faded,
+    dense,
     onChange,
     onCommit,
     onCancel,
@@ -72,6 +167,8 @@ export function QuantityInput({
     error?: boolean
     // For an amount that is only planned, not logged yet
     faded?: boolean
+    // Smaller, for a food inside another
+    dense?: boolean
     onChange: (value: string) => void
     onCommit: () => void
     onCancel: () => void
@@ -93,7 +190,16 @@ export function QuantityInput({
             error={error}
             inputProps={{ min: 0, step: 'any', inputMode: 'decimal', 'aria-label': label }}
             InputProps={{ endAdornment: <InputAdornment position="end">{quantityUnitLabel(unit)}</InputAdornment> }}
-            sx={{ width: 120, flexShrink: 0, ...(faded && { '& input': { color: 'text.secondary' } }) }}
+            sx={{
+                width: 120,
+                flexShrink: 0,
+                ...(faded && { '& input': { color: 'text.secondary' } }),
+                ...(dense && {
+                    '& .MuiInputBase-root': { fontSize: '0.8125rem' },
+                    '& .MuiInputBase-input': { py: 0.5 },
+                    '& .MuiInputAdornment-root p': { fontSize: '0.75rem' },
+                }),
+            }}
         />
     )
 }

@@ -1,4 +1,4 @@
-import type { FoodRow } from '../types/entityTypes'
+import type { FoodContentRow, FoodRow } from '../types/entityTypes'
 import { formatNumber } from './workoutStats'
 
 export const NUTRIENTS = [
@@ -53,6 +53,25 @@ export function sumNutrients(list: Nutrients[]): Nutrients {
     const total = { ...NO_NUTRIENTS }
     for (const n of list) for (const { key } of NUTRIENTS) total[key] += n[key]
     return total
+}
+
+// A food that goes in another, and how much of it
+export type FoodContent = { id: string; food: FoodRow; quantity: number }
+
+// What goes in each food, by the food's id, in order. Deleted foods are left out on both sides.
+export function contentsByFood(rows: FoodContentRow[], foods: FoodRow[]): Map<string, FoodContent[]> {
+    const foodsById = new Map(foods.map((f) => [f.id, f]))
+    const byFood = new Map<string, FoodContent[]>()
+    for (const row of rows) {
+        const food = foodsById.get(row.contentId)
+        if (!food || !foodsById.has(row.foodId)) continue
+        byFood.set(row.foodId, [...(byFood.get(row.foodId) ?? []), { id: row.id, food, quantity: row.quantity }])
+    }
+    return byFood
+}
+
+export function contentsNutrients(contents: FoodContent[]): Nutrients {
+    return sumNutrients(contents.map((c) => foodNutrients(c.food, c.quantity)))
 }
 
 // "125 kcal · P 13 g · C 1 g · F 9 g · Fib 0 g"
