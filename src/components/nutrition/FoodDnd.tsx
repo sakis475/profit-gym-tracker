@@ -12,6 +12,7 @@ import {
 } from '../../lib/nutrition'
 import type { FoodRow } from '../../types/entityTypes'
 import { WithDragSidebar, type SidebarItem } from '../DragSidebar'
+import { useT } from '../../i18n'
 
 // Drag and drop of foods onto meals, shared by the meal plan and the food diary.
 // Each of them supplies the DndContext and decides what a drop does.
@@ -23,7 +24,7 @@ export type FoodDragData = { kind: 'food'; food: FoodRow }
 export function WithFoodSidebar({
     foods,
     contents,
-    title = 'Foods: drag onto a meal, or onto a food to put it in',
+    title,
     children,
 }: {
     foods: FoodRow[]
@@ -32,27 +33,28 @@ export function WithFoodSidebar({
     title?: string
     children: React.ReactNode
 }) {
+    const m = useT()
     const items = useMemo<SidebarItem[]>(
         () => foods.map((food) => {
             const inside = contents.get(food.id) ?? []
             // With foods in it, it comes to what is in it; its own unit and values don't apply
             const values = inside.length > 0 ? contentsNutrients(inside) : food
-            const per = inside.length > 0 ? `${inside.length} ${inside.length === 1 ? 'food' : 'foods'} in it` : `per ${unitPer(food.unit)}`
+            const per = inside.length > 0 ? m.nutrition.foodsInIt(inside.length) : m.foodUnits.per(unitPer(food.unit))
             return {
                 dragId: `food:${food.id}`,
                 name: food.name,
-                detail: `${per} · ${formatNutrient(values.kcal, 'kcal')} kcal · P ${formatNutrient(values.protein, 'protein')} g`,
+                detail: `${per} · ${formatNutrient(values.kcal, 'kcal')} ${m.units.kcal} · ${m.nutrients.protein.short} ${formatNutrient(values.protein, 'protein')} ${m.units.g}`,
                 data: { kind: 'food', food } satisfies FoodDragData,
             }
         }),
-        [foods, contents]
+        [foods, contents, m]
     )
 
     return (
         <WithDragSidebar
-            title={title}
+            title={title ?? m.nutrition.sidebar.title}
             items={items}
-            emptyText="No foods yet. Add them in the Foods tab."
+            emptyText={m.nutrition.sidebar.empty}
         >
             {children}
         </WithDragSidebar>
@@ -129,6 +131,7 @@ export function MadeOfNames({ names }: { names: string[] }) {
 // Opens and closes the list of what is in a food. It takes the place of the amount, which a food
 // made of foods does not have, so it is as wide.
 export function MadeOfToggle({ name, madeOf }: { name: string; madeOf: MadeOf }) {
+    const m = useT()
     const count = madeOf.names.length
     return (
         <Button
@@ -136,11 +139,11 @@ export function MadeOfToggle({ name, madeOf }: { name: string; madeOf: MadeOf })
             color="inherit"
             onClick={madeOf.onToggle}
             aria-expanded={madeOf.open}
-            aria-label={`${madeOf.open ? 'Hide' : 'Show'} what is in ${name}`}
+            aria-label={madeOf.open ? m.nutrition.hideContents(name) : m.nutrition.showContents(name)}
             endIcon={<ExpandMoreIcon sx={{ transition: 'transform 150ms', transform: madeOf.open ? 'rotate(180deg)' : 'none' }} />}
             sx={{ width: 120, flexShrink: 0, color: 'text.secondary', textTransform: 'none' }}
         >
-            {count} {count === 1 ? 'food' : 'foods'}
+            {m.nutrition.foodsCount(count)}
         </Button>
     )
 }

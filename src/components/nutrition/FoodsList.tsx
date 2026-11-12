@@ -79,6 +79,7 @@ import {
 import { dropCollision } from './dropCollision'
 import { useOpenContents } from './useOpenContents'
 import { DragPreview } from '../DragSidebar'
+import { useT } from '../../i18n'
 
 type Props = {
     foods: FoodRow[]
@@ -112,6 +113,7 @@ function toForm(food: FoodRow): FoodForm {
 }
 
 export default function FoodsList({ foods, contents, onChange }: Props) {
+    const m = useT()
     // Your foods, or the public library to add from; opens on the one last used
     const [tab, setTab] = useState<FoodsTab>(() => (lastTab(TAB_KEY) === 'library' ? 'library' : 'mine'))
     const [search, setSearch] = useState('')
@@ -185,28 +187,28 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
         e.preventDefault()
         if (!form) return
         setError(null)
-        if (!form.name.trim()) return setError('Name is required')
+        if (!form.name.trim()) return setError(m.nutrition.foods.nameRequired)
 
         const values = {} as Record<NutrientKey, number>
         for (const { key, label } of NUTRIENTS) {
             // Left empty, it is 0
             const value = form[key] === '' ? 0 : Number(form[key])
-            if (!(value >= 0)) return setError(`${label} must be 0 or more`)
+            if (!(value >= 0)) return setError(m.nutrition.foods.mustBeZeroOrMore(label))
             values[key] = value
         }
         const badAmount = madeOf.find((c) => !(Number(c.quantity) > 0))
-        if (badAmount) return setError(`The amount of ${badAmount.food.name} must be more than 0`)
+        if (badAmount) return setError(m.nutrition.foods.amountPositive(badAmount.food.name))
 
         const payload = { name: form.name.trim(), unit: form.unit, notes: form.notes.trim() || null, ...values }
         setSaving(true)
         const res = editing ? await updateFood(editing.id, payload) : await createFood(payload)
         const contentsSaved = !!res && await saveMadeOf(res.id)
         setSaving(false)
-        if (!res) return setError(editing ? 'Failed to save food' : 'Failed to create food')
+        if (!res) return setError(editing ? m.nutrition.foods.failedToSaveFood : m.nutrition.foods.failedToCreateFood)
         // Either way the dialog closes: saving it again could add what was already saved twice.
         // Opened again, it shows what was saved.
         setForm(null)
-        setListError(contentsSaved ? null : `Saved ${res.name}, but not all of what it is made of. Open it to check.`)
+        setListError(contentsSaved ? null : m.nutrition.foods.savedNotContents(res.name))
         onChange()
     }
 
@@ -215,7 +217,7 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
         setSaving(true)
         const res = await deleteFood(deleting.id)
         setSaving(false)
-        if (!res) return setError('Failed to delete food')
+        if (!res) return setError(m.nutrition.foods.failedToDeleteFood)
         setDeleting(null)
         onChange()
     }
@@ -223,10 +225,10 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
     // Why `food` can't go in `into`, or null when it can. One level only: a food with contents
     // goes in no other, and a food that goes in another gets no contents.
     function cannotPutIn(food: FoodRow, into: FoodRow) {
-        if (food.id === into.id) return `${food.name} can't go in itself`
-        if ((contents.get(food.id) ?? []).length > 0) return `${food.name} has foods in it, so it can't go in another food`
+        if (food.id === into.id) return m.nutrition.foods.cantGoInItself(food.name)
+        if ((contents.get(food.id) ?? []).length > 0) return m.nutrition.cantGoIn(food.name)
         const parent = parentOf.get(into.id)
-        if (parent) return `${into.name} goes in ${parent.name}, so nothing can go in it`
+        if (parent) return m.nutrition.foods.goesIn(into.name, parent.name)
         return null
     }
 
@@ -240,7 +242,7 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             quantity,
             order: (contents.get(into.id) ?? []).length,
         })
-        if (!id) return { error: `Failed to put ${food.name} in ${into.name}` }
+        if (!id) return { error: m.nutrition.foods.failedToPutIn(food.name, into.name) }
         // What was put in shows
         openContents.show(into.id)
         onChange()
@@ -298,18 +300,18 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             onDragCancel={() => setDragging(null)}
         >
             <Tabs value={tab} onChange={(_, value: FoodsTab) => chooseTab(value)} sx={{ mb: 2, minHeight: 40 }}>
-                <Tab value="mine" label="My foods" sx={{ minHeight: 40 }} />
-                <Tab value="library" label="Public library" sx={{ minHeight: 40 }} />
+                <Tab value="mine" label={m.nutrition.foods.tabs.mine} sx={{ minHeight: 40 }} />
+                <Tab value="library" label={m.nutrition.foods.tabs.library} sx={{ minHeight: 40 }} />
             </Tabs>
 
             {tab === 'library' ? (
                 <PublicLibrary myFoods={foods} onAdd={addFromLibrary} />
             ) : (
-                <WithFoodSidebar foods={foods} contents={contents} title="Foods: drag onto a food to put it in">
+                <WithFoodSidebar foods={foods} contents={contents} title={m.nutrition.sidebar.titleFoods}>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
                         <TextField
                             size="small"
-                            placeholder="Search foods"
+                            placeholder={m.nutrition.foods.searchFoods}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             sx={{ flex: '1 1 220px' }}
@@ -322,7 +324,7 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                             }}
                         />
                         <Button variant="contained" startIcon={<AddIcon />} onClick={() => openForm()}>
-                            Add food
+                            {m.nutrition.addFood}
                         </Button>
                     </Box>
                     {listError && <Typography color="error" sx={{ mt: 2 }}>{listError}</Typography>}
@@ -355,8 +357,8 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                                                     content={c}
                                                     autoFocus={c.id === focusId}
                                                     onBlurred={() => setFocusId(null)}
-                                                    onCommit={(quantity) => run(() => updateFoodContent(c.id, { quantity }), 'Failed to save')}
-                                                    onRemove={() => run(() => deleteFoodContent(c.id), `Failed to take ${c.food.name} out`)}
+                                                    onCommit={(quantity) => run(() => updateFoodContent(c.id, { quantity }), m.common.failedToSave)}
+                                                    onRemove={() => run(() => deleteFoodContent(c.id), m.nutrition.foods.failedToTakeOut(c.food.name))}
                                                 />
                                             ))}
                                         </ContentsList>
@@ -365,7 +367,7 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                             )
                         })}
                         {shown.length === 0 && (
-                            <Typography sx={{ mt: 2 }}>{foods.length === 0 ? 'No foods yet.' : 'No foods match your search.'}</Typography>
+                            <Typography sx={{ mt: 2 }}>{foods.length === 0 ? m.nutrition.foods.noFoodsYet : m.nutrition.foods.noMatches}</Typography>
                         )}
                     </Stack>
                 </WithFoodSidebar>
@@ -377,8 +379,8 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
 
             {puttingIn && (
                 <FoodEntryDialog
-                    title={`Put a food in ${puttingIn.name}`}
-                    submitLabel="Add"
+                    title={m.nutrition.putIn(puttingIn.name)}
+                    submitLabel={m.common.add}
                     meals={[]}
                     hideMeal
                     // Only foods that can go in it
@@ -395,12 +397,12 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             )}
 
             <Dialog open={!!form} onClose={() => setForm(null)} fullWidth maxWidth="sm">
-                <DialogTitle>{editing ? 'Edit food' : 'Add food'}</DialogTitle>
+                <DialogTitle>{editing ? m.nutrition.foods.editFood : m.nutrition.addFood}</DialogTitle>
                 {form && (
                     <form onSubmit={handleSubmit}>
                         <DialogContent>
                             <TextField
-                                label="Name"
+                                label={m.common.name}
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                                 fullWidth
@@ -412,11 +414,11 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                                 <>
                                     <TextField
                                         select
-                                        label="Measured in"
+                                        label={m.nutrition.foods.measuredIn}
                                         value={form.unit}
                                         onChange={(e) => setForm({ ...form, unit: e.target.value })}
                                         fullWidth
-                                        helperText={`The values below are per ${unitPer(form.unit)}. For a food made of other foods, like an omelette, add them below instead.`}
+                                        helperText={m.nutrition.foods.valuesPer(unitPer(form.unit))}
                                         sx={{ mb: 2 }}
                                     >
                                         {FOOD_UNITS.map((u) => (
@@ -449,7 +451,7 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                                 onChange={setMadeOf}
                             />
                             <TextField
-                                label="Notes"
+                                label={m.common.notes}
                                 value={form.notes}
                                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                                 fullWidth
@@ -459,9 +461,9 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
                             {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                         </DialogContent>
                         <DialogActions>
-                            <Button onClick={() => setForm(null)} disabled={saving}>Cancel</Button>
+                            <Button onClick={() => setForm(null)} disabled={saving}>{m.common.cancel}</Button>
                             <Button type="submit" variant="contained" disabled={saving}>
-                                {saving ? 'Saving…' : editing ? 'Save' : 'Add'}
+                                {saving ? m.common.saving : editing ? m.common.save : m.common.add}
                             </Button>
                         </DialogActions>
                     </form>
@@ -469,18 +471,15 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             </Dialog>
 
             <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
-                <DialogTitle>Delete food</DialogTitle>
+                <DialogTitle>{m.nutrition.foods.deleteTitle}</DialogTitle>
                 <DialogContent>
-                    <Typography>
-                        Delete "{deleting?.name}"? It is also taken out of your meal plan and out of the foods it goes in.
-                        Days you already logged keep it.
-                    </Typography>
+                    <Typography>{deleting && m.nutrition.foods.deleteConfirm(deleting.name)}</Typography>
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeleting(null)} disabled={saving}>Cancel</Button>
+                    <Button onClick={() => setDeleting(null)} disabled={saving}>{m.common.cancel}</Button>
                     <Button color="error" variant="contained" onClick={handleDelete} disabled={saving}>
-                        {saving ? 'Deleting…' : 'Delete'}
+                        {saving ? m.common.deleting : m.common.delete}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -506,6 +505,7 @@ function FoodCard({
     onDelete: () => void
     children: React.ReactNode
 }) {
+    const m = useT()
     const { setNodeRef, isOver } = useDroppable({ id: `food-into:${food.id}`, data: { intoKey: food.id } })
 
     return (
@@ -535,16 +535,16 @@ function FoodCard({
                 </Box>
                 {madeOf && <MadeOfToggle name={food.name} madeOf={madeOf} />}
                 {canTakeIn && (
-                    <Tooltip title={`Put a food in ${food.name}`}>
-                        <IconButton aria-label={`Put a food in ${food.name}`} onClick={onPutIn}>
+                    <Tooltip title={m.nutrition.putIn(food.name)}>
+                        <IconButton aria-label={m.nutrition.putIn(food.name)} onClick={onPutIn}>
                             <AddIntoIcon />
                         </IconButton>
                     </Tooltip>
                 )}
-                <IconButton aria-label={`Edit ${food.name}`} onClick={onEdit}>
+                <IconButton aria-label={m.nutrition.edit(food.name)} onClick={onEdit}>
                     <EditIcon />
                 </IconButton>
-                <IconButton aria-label={`Delete ${food.name}`} onClick={onDelete}>
+                <IconButton aria-label={m.nutrition.foods.deleteAria(food.name)} onClick={onDelete}>
                     <DeleteIcon />
                 </IconButton>
             </Box>
@@ -567,6 +567,7 @@ function ContentRow({
     onCommit: (quantity: number) => Promise<boolean>
     onRemove: () => void
 }) {
+    const m = useT()
     const [draft, setDraft] = useState(String(content.quantity))
     const amount = Number(draft)
     // The values follow what is typed, before it is saved
@@ -588,15 +589,15 @@ function ContentRow({
             <QuantityInput
                 value={draft}
                 unit={content.food.unit}
-                label={`Amount of ${content.food.name}`}
+                label={m.nutrition.amountOf(content.food.name)}
                 autoFocus={autoFocus}
                 dense
                 onChange={setDraft}
                 onCommit={commit}
                 onCancel={() => setDraft(String(content.quantity))}
             />
-            <Tooltip title="Take it out">
-                <IconButton size="small" aria-label={`Take ${content.food.name} out`} onClick={onRemove}>
+            <Tooltip title={m.nutrition.foods.takeOut}>
+                <IconButton size="small" aria-label={m.nutrition.foods.takeOutAria(content.food.name)} onClick={onRemove}>
                     <CloseIcon fontSize="small" />
                 </IconButton>
             </Tooltip>
@@ -618,6 +619,7 @@ function MadeOfEditor({
     blockedBy: FoodRow | null
     onChange: (items: DraftContent[]) => void
 }) {
+    const m = useT()
     // The text in the add box, cleared after each pick
     const [search, setSearch] = useState('')
     // Keys for the foods added in the dialog, which have no id yet
@@ -639,7 +641,7 @@ function MadeOfEditor({
         <Box sx={{ mt: items.length > 0 ? 0 : 2 }}>
             {blockedBy ? (
                 <Typography variant="body2" color="text.secondary">
-                    It goes in {blockedBy.name}, so no foods can go in it.
+                    {m.nutrition.foods.blockedBy(blockedBy.name)}
                 </Typography>
             ) : (
                 <>
@@ -655,7 +657,7 @@ function MadeOfEditor({
                                 <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Typography variant="body2" noWrap>{c.food.name}</Typography>
                                     <Typography variant="caption" color="text.secondary" component="div">
-                                        {amount > 0 ? describeNutrients(foodNutrients(c.food, amount)) : 'Enter an amount'}
+                                        {amount > 0 ? describeNutrients(foodNutrients(c.food, amount)) : m.nutrition.foods.enterAmount}
                                     </Typography>
                                 </Box>
                                 <TextField
@@ -664,14 +666,14 @@ function MadeOfEditor({
                                     value={c.quantity}
                                     error={!(amount > 0)}
                                     onChange={(e) => onChange(items.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
-                                    inputProps={{ min: 0, step: 'any', inputMode: 'decimal', 'aria-label': `Amount of ${c.food.name}` }}
+                                    inputProps={{ min: 0, step: 'any', inputMode: 'decimal', 'aria-label': m.nutrition.amountOf(c.food.name) }}
                                     InputProps={{ endAdornment: <InputAdornment position="end">{quantityUnitLabel(c.food.unit)}</InputAdornment> }}
                                     sx={{ width: 120, flexShrink: 0 }}
                                 />
-                                <Tooltip title="Take it out">
+                                <Tooltip title={m.nutrition.foods.takeOut}>
                                     <IconButton
                                         size="small"
-                                        aria-label={`Take ${c.food.name} out`}
+                                        aria-label={m.nutrition.foods.takeOutAria(c.food.name)}
                                         onClick={() => onChange(items.filter((_, j) => j !== i))}
                                     >
                                         <CloseIcon fontSize="small" />
@@ -695,7 +697,7 @@ function MadeOfEditor({
                             <TextField
                                 {...params}
                                 size="small"
-                                placeholder={items.length > 0 ? 'Add another food' : 'Add a food, e.g. eggs in an omelette'}
+                                placeholder={items.length > 0 ? m.nutrition.foods.addAnother : m.nutrition.foods.addFirst}
                             />
                         )}
                         sx={{ mt: 1 }}

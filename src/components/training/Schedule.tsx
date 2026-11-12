@@ -44,11 +44,10 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { DragPreview, WithDragSidebar, type SidebarItem } from '../DragSidebar'
+import { useT } from '../../i18n'
 
-// Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay()
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const DAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-// Displayed Monday first
+// Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay(), which
+// is how the translations list the day names. Displayed Monday first.
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 // An exercise dragged from the list
@@ -75,6 +74,7 @@ function SortableScheduleItem({
     onEdit: () => void
     onDelete: () => void
 }) {
+    const m = useT()
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
 
     return (
@@ -87,17 +87,17 @@ function SortableScheduleItem({
             }}
             secondaryAction={
                 <>
-                    <IconButton aria-label="Edit schedule" onClick={onEdit}>
+                    <IconButton aria-label={m.training.plan.editAria} onClick={onEdit}>
                         <EditIcon />
                     </IconButton>
-                    <IconButton aria-label="Delete schedule" onClick={onDelete}>
+                    <IconButton aria-label={m.training.plan.deleteAria} onClick={onDelete}>
                         <DeleteIcon />
                     </IconButton>
                 </>
             }
         >
             <Box
-                aria-label="Drag to reorder, or onto a day to move it there"
+                aria-label={m.training.plan.dragAria}
                 {...attributes}
                 {...listeners}
                 sx={{
@@ -163,6 +163,9 @@ function DayList({ day, highlight, children }: { day: number; highlight: boolean
 }
 
 export default function Schedule() {
+    const m = useT()
+    const s = m.training.plan
+    const DAY_NAMES = m.days.long
     const [items, setItems] = useState<ScheduleWithExercise[] | null>(null)
     const [loadFailed, setLoadFailed] = useState(false)
     const [version, setVersion] = useState(0)
@@ -226,7 +229,7 @@ export default function Schedule() {
         e?.preventDefault()
         setError(null)
         if (!exerciseId) {
-            setError('Exercise is required')
+            setError(s.exerciseRequired)
             return
         }
         setCreating(true)
@@ -236,7 +239,7 @@ export default function Schedule() {
             : await createSchedule(payload as ScheduleInsert)
         setCreating(false)
         if (!res) {
-            setError(editing ? 'Failed to update schedule' : 'Failed to create schedule')
+            setError(editing ? s.failedToUpdate : s.failedToCreate)
             return
         }
         setSelectedDay(day)
@@ -250,7 +253,7 @@ export default function Schedule() {
         const res = await deleteSchedule(deleting.id)
         setDeleteBusy(false)
         if (!res) {
-            setError('Failed to delete schedule')
+            setError(s.failedToDelete)
             return
         }
         setDeleting(null)
@@ -286,7 +289,7 @@ export default function Schedule() {
         if (dragged?.kind === 'exercise') {
             if (!drop) return
             const res = await createSchedule({ day: drop.day, exerciseId: dragged.exercise.id, order: countOn(drop.day) })
-            if (!res) return setError(`Failed to add ${dragged.exercise.name}`)
+            if (!res) return setError(s.failedToAdd(dragged.exercise.name))
             setSelectedDay(drop.day)
             reload()
             return
@@ -297,7 +300,7 @@ export default function Schedule() {
             const item = dayItems.find((it) => it.id === active.id)
             if (!item || drop.day === item.day) return
             const res = await updateSchedule(item.id, { day: drop.day, order: countOn(drop.day) })
-            if (!res) return setError(`Failed to move ${item.exercises.name}`)
+            if (!res) return setError(s.failedToMove(item.exercises.name))
             reload()
             return
         }
@@ -317,7 +320,7 @@ export default function Schedule() {
         })
 
         reorderSchedules(reordered.map((it) => it.id)).then((ok) => {
-            if (!ok) setError('Failed to save new order')
+            if (!ok) setError(s.failedToReorder)
         })
     }
 
@@ -333,13 +336,13 @@ export default function Schedule() {
             onDragCancel={() => setDragging(null)}
         >
             <WithDragSidebar
-                title="Exercises: drag onto a day"
+                title={s.sidebarTitle}
                 items={sidebarItems}
-                emptyText="No exercises yet. Add them in the Exercises tab."
+                emptyText={m.training.sidebarEmpty}
             >
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                     <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
-                        Add to schedule
+                        {s.addToSchedule}
                     </Button>
                 </Box>
 
@@ -351,12 +354,12 @@ export default function Schedule() {
                     onChange={(_, value: number | null) => {
                         if (value !== null) setSelectedDay(value)
                     }}
-                    aria-label="Day of the week"
+                    aria-label={m.days.dayOfWeek}
                     sx={{ mt: 2 }}
                 >
                     {DAY_ORDER.map((d) => (
                         <DayButton key={d} day={d} value={d} highlight={!!dragging} aria-label={DAY_NAMES[d]}>
-                            {DAY_SHORT_NAMES[d]}
+                            {m.days.short[d]}
                         </DayButton>
                     ))}
                 </ToggleButtonGroup>
@@ -364,9 +367,9 @@ export default function Schedule() {
                 {error && !modalOpen && !deleting && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
 
                 {loadFailed && !items ? (
-                    <Typography color="error" sx={{ mt: 2 }}>Failed to load your schedule.</Typography>
+                    <Typography color="error" sx={{ mt: 2 }}>{s.failedToLoad}</Typography>
                 ) : !items ? (
-                    <Typography sx={{ mt: 2 }}>Loading...</Typography>
+                    <Typography sx={{ mt: 2 }}>{m.common.loading}</Typography>
                 ) : (
                     <DayList day={selectedDay} highlight={!!dragging}>
                         <List>
@@ -384,9 +387,9 @@ export default function Schedule() {
                                 </SortableContext>
                             ) : (
                                 <Typography sx={{ px: 2 }}>
-                                    Nothing scheduled for {DAY_NAMES[selectedDay]}.
+                                    {s.nothingScheduled(DAY_NAMES[selectedDay])}
                                     {/* Only where the exercise list is shown */}
-                                    <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}> Drag exercises here.</Box>
+                                    <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{s.dragHere}</Box>
                                 </Typography>
                             )}
                         </List>
@@ -399,12 +402,12 @@ export default function Schedule() {
             </DragOverlay>
 
             <Dialog open={modalOpen} onClose={closeModal} fullWidth maxWidth="sm">
-                <DialogTitle>{editing ? 'Edit schedule' : 'Add to schedule'}</DialogTitle>
+                <DialogTitle>{editing ? s.editSchedule : s.addToSchedule}</DialogTitle>
                 <form onSubmit={handleSubmit}>
                     <DialogContent>
                         <TextField
                             select
-                            label="Day"
+                            label={s.day}
                             value={day}
                             onChange={(e) => setDay(Number(e.target.value))}
                             fullWidth
@@ -416,12 +419,12 @@ export default function Schedule() {
                         </TextField>
                         <TextField
                             select
-                            label="Exercise"
+                            label={s.exercise}
                             value={exercises.some((ex) => ex.id === exerciseId) ? exerciseId : ''}
                             onChange={(e) => setExerciseId(e.target.value)}
                             fullWidth
                             required
-                            helperText={exercises.length === 0 ? 'Create an exercise first' : undefined}
+                            helperText={exercises.length === 0 ? s.createExerciseFirst : undefined}
                             SelectProps={{
                                 renderValue: (value) => exercises.find((ex) => ex.id === value)?.name ?? '',
                             }}
@@ -440,26 +443,26 @@ export default function Schedule() {
                         {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={closeModal} disabled={creating}>Cancel</Button>
+                        <Button onClick={closeModal} disabled={creating}>{m.common.cancel}</Button>
                         <Button type="submit" variant="contained" disabled={creating}>
-                            {editing ? (creating ? 'Saving…' : 'Save') : (creating ? 'Adding…' : 'Add')}
+                            {editing ? (creating ? m.common.saving : m.common.save) : (creating ? m.common.adding : m.common.add)}
                         </Button>
                     </DialogActions>
                 </form>
             </Dialog>
 
             <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
-                <DialogTitle>Remove from schedule</DialogTitle>
+                <DialogTitle>{s.removeTitle}</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Remove "{deleting?.exercises.name}" from {deleting ? DAY_NAMES[deleting.day] : ''}?
+                        {deleting && s.removeConfirm(deleting.exercises.name, DAY_NAMES[deleting.day])}
                     </Typography>
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</Button>
+                    <Button onClick={() => setDeleting(null)} disabled={deleteBusy}>{m.common.cancel}</Button>
                     <Button color="error" variant="contained" onClick={handleDelete} disabled={deleteBusy}>
-                        {deleteBusy ? 'Removing…' : 'Remove'}
+                        {deleteBusy ? m.common.removing : m.common.remove}
                     </Button>
                 </DialogActions>
             </Dialog>

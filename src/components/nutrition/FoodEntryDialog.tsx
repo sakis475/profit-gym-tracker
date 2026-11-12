@@ -13,6 +13,7 @@ import {
     Typography,
 } from '@mui/material'
 import type { FoodRow, MealRow } from '../../types/entityTypes'
+import { useT } from '../../i18n'
 import {
     contentsNutrients,
     describeNutrients,
@@ -58,6 +59,7 @@ export default function FoodEntryDialog({
     onClose,
     onSubmit,
 }: Props) {
+    const m = useT()
     const [mealId, setMealId] = useState(initial.mealId ?? meals[0]?.id ?? '')
     const [food, setFood] = useState<FoodRow | null>(foods.find((f) => f.id === initial.foodId) ?? null)
     const [quantity, setQuantity] = useState(initial.quantity !== undefined ? String(initial.quantity) : '')
@@ -75,8 +77,8 @@ export default function FoodEntryDialog({
     function describeOption(f: FoodRow) {
         const list = insideOf(f)
         const values = list.length > 0 ? contentsNutrients(list) : f
-        const per = list.length > 0 ? `made of ${list.length} ${list.length === 1 ? 'food' : 'foods'}` : `per ${unitPer(f.unit)}`
-        return `${per} · ${formatNutrient(values.kcal, 'kcal')} kcal · P ${formatNutrient(values.protein, 'protein')} g`
+        const per = list.length > 0 ? m.nutrition.madeOfCount(list.length) : m.foodUnits.per(unitPer(f.unit))
+        return `${per} · ${formatNutrient(values.kcal, 'kcal')} ${m.units.kcal} · ${m.nutrients.protein.short} ${formatNutrient(values.protein, 'protein')} ${m.units.g}`
     }
 
     function chooseFood(next: FoodRow | null) {
@@ -88,9 +90,9 @@ export default function FoodEntryDialog({
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         setError(null)
-        if (!hideMeal && !mealId) return setError('Choose a meal')
-        if (!food) return setError('Choose a food')
-        if (!madeOfFoods && !(amount > 0)) return setError('Quantity must be more than 0')
+        if (!hideMeal && !mealId) return setError(m.nutrition.entry.chooseMeal)
+        if (!food) return setError(m.nutrition.entry.chooseFood)
+        if (!madeOfFoods && !(amount > 0)) return setError(m.nutrition.entry.quantityPositive)
 
         setSaving(true)
         // A food made of foods has no amount of its own; 1 is stored
@@ -107,12 +109,12 @@ export default function FoodEntryDialog({
                     {!hideMeal && (
                         <TextField
                             select
-                            label="Meal"
+                            label={m.nutrition.entry.meal}
                             value={meals.some((m) => m.id === mealId) ? mealId : ''}
                             onChange={(e) => setMealId(e.target.value)}
                             fullWidth
                             required
-                            helperText={meals.length === 0 ? 'Add a meal in the Plan tab first' : undefined}
+                            helperText={meals.length === 0 ? m.nutrition.entry.addMealFirst : undefined}
                             sx={{ mt: 1, mb: 2 }}
                         >
                             {meals.map((m) => (
@@ -141,19 +143,19 @@ export default function FoodEntryDialog({
                         renderInput={(params) => (
                             <TextField
                                 {...params}
-                                label="Food"
+                                label={m.nutrition.entry.food}
                                 required
-                                helperText={foods.length === 0 ? 'Add foods in the Foods tab first' : undefined}
+                                helperText={foods.length === 0 ? m.nutrition.entry.addFoodsFirst : undefined}
                             />
                         )}
                     />
                     {madeOfFoods ? (
                         <Typography variant="body2" sx={{ mt: 2 }}>
-                            Made of {inside.map((c) => `${formatQuantity(c.quantity, c.food.unit)} ${c.food.name}`).join(', ')}
+                            {m.nutrition.entry.madeOf(inside.map((c) => `${formatQuantity(c.quantity, c.food.unit)} ${c.food.name}`).join(', '))}
                         </Typography>
                     ) : (
                         <TextField
-                            label="Quantity"
+                            label={m.nutrition.entry.quantity}
                             type="number"
                             value={quantity}
                             onChange={(e) => setQuantity(e.target.value)}
@@ -174,9 +176,9 @@ export default function FoodEntryDialog({
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={onClose} disabled={saving}>Cancel</Button>
+                    <Button onClick={onClose} disabled={saving}>{m.common.cancel}</Button>
                     <Button type="submit" variant="contained" disabled={saving || !valid}>
-                        {saving ? 'Saving…' : submitLabel}
+                        {saving ? m.common.saving : submitLabel}
                     </Button>
                 </DialogActions>
             </form>

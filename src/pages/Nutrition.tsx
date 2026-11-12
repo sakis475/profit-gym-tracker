@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Box, Tab, Tabs, Typography } from '@mui/material'
 import { getBodyWeights, getFoodContents, getFoods, getGoals, getMealPlan, getMeals } from '../services/nutrition'
 import { useTabParam } from '../lib/useTabParam'
+import { useT } from '../i18n'
 import { contentsByFood, type FoodContent } from '../lib/nutrition'
 import type {
     BodyWeightRow,
@@ -32,6 +33,7 @@ const NO_CONTENTS = new Map<string, FoodContent[]>()
 
 export default function Nutrition() {
     const [view, setView] = useTabParam(TABS)
+    const m = useT()
     // undefined while loading the first time, null when it failed
     const [data, setData] = useState<Data | null | undefined>(undefined)
     // Bumped after a change, to load everything again. It is little data, so this keeps the tabs in step.
@@ -64,21 +66,21 @@ export default function Nutrition() {
 
     return (
         <>
-            <Typography variant="h5">Nutrition</Typography>
+            <Typography variant="h5">{m.nutrition.title}</Typography>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                 <Tabs value={view} onChange={(_, value: View) => setView(value)} variant="scrollable" allowScrollButtonsMobile>
-                    <Tab value="today" label="Today" />
-                    <Tab value="plan" label="Plan" />
-                    <Tab value="foods" label="Foods" />
-                    <Tab value="progress" label="Progress" />
+                    <Tab value="today" label={m.nutrition.tabs.today} />
+                    <Tab value="plan" label={m.nutrition.tabs.plan} />
+                    <Tab value="foods" label={m.nutrition.tabs.foods} />
+                    <Tab value="progress" label={m.nutrition.tabs.progress} />
                 </Tabs>
             </Box>
 
             {data === undefined ? (
-                <Typography>Loading...</Typography>
+                <Typography>{m.common.loading}</Typography>
             ) : data === null ? (
-                <Typography color="error">Failed to load your nutrition data.</Typography>
+                <Typography color="error">{m.nutrition.failedToLoad}</Typography>
             ) : view === 'today' ? (
                 <FoodDiary
                     plan={data.plan}

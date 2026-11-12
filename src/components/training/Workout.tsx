@@ -35,8 +35,7 @@ import {
     type DragStartEvent,
 } from '@dnd-kit/core'
 import { DragPreview, WithDragSidebar, type SidebarItem } from '../DragSidebar'
-
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+import { locale, useT } from '../../i18n'
 
 type SetFields = { reps: string; kg: string; notes: string }
 const EMPTY_SET: SetFields = { reps: '', kg: '', notes: '' }
@@ -48,7 +47,7 @@ function startOfToday() {
 }
 
 function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString(undefined, {
+    return new Date(iso).toLocaleDateString(locale(), {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
@@ -111,6 +110,9 @@ function TodayDropZone({ highlight, children }: { highlight: boolean; children: 
 }
 
 export default function Workout() {
+    const m = useT()
+    const w = m.training.today
+    const DAY_NAMES = m.days.long
     const today = new Date().getDay()
     const [planned, setPlanned] = useState<ScheduleWithExercise[]>([])
     // Exercises done today without being planned, in the order they were added
@@ -191,12 +193,12 @@ export default function Workout() {
                 key: `extra:${id}`,
                 exerciseId: id,
                 // Only active exercises are loaded, a deleted one keeps its logged sets without a name
-                name: byId.get(id)?.name ?? 'Deleted exercise',
+                name: byId.get(id)?.name ?? m.training.deletedExercise,
                 category: byId.get(id)?.category ?? null,
                 planned: false,
             })),
         ]
-    }, [planned, extras, exercises])
+    }, [planned, extras, exercises, m])
 
     const sidebarItems = useMemo<SidebarItem[]>(
         () => [...exercises]
@@ -214,7 +216,7 @@ export default function Workout() {
     async function addExtra(exercise: ExerciseRow) {
         setNotice(null)
         if (items.some((it) => it.exerciseId === exercise.id)) {
-            setNotice(`${exercise.name} is already on today's list.`)
+            setNotice(w.alreadyOnList(exercise.name))
             return
         }
         setExtras((prev) => [...prev, exercise.id])
@@ -285,13 +287,13 @@ export default function Workout() {
             const repsNum = reps ? Number(reps) : null
             const kgNum = kg ? Number(kg) : null
             if ((repsNum !== null && !(Number.isInteger(repsNum) && repsNum >= 0)) || (kgNum !== null && !(kgNum >= 0))) {
-                setError(exerciseId, `Set ${i + 1}: reps must be a whole number, kg a positive number`)
+                setError(exerciseId, w.setInvalid(i + 1))
                 return
             }
             rows.push({ set: i + 1, reps: repsNum, kg: kgNum, notes: notes.trim() || null })
         }
         if (rows.length === 0) {
-            setError(exerciseId, 'Enter reps or kg for at least one set')
+            setError(exerciseId, w.noSets)
             return
         }
 
@@ -303,7 +305,7 @@ export default function Workout() {
             : await createWorkoutSets(rows.map((row) => ({ ...row, exerciseId, createdAt: new Date().toISOString() })))
         setSaving(null)
         if (!res) {
-            setError(exerciseId, existing ? 'Failed to save changes' : 'Failed to log workout')
+            setError(exerciseId, existing ? w.failedToSaveChanges : w.failedToLog)
             return
         }
         setLogged((prev) => ({ ...prev, [exerciseId]: res }))
@@ -318,25 +320,25 @@ export default function Workout() {
             onDragCancel={() => setDragging(null)}
         >
             <WithDragSidebar
-                title="Exercises: drag in to do today"
+                title={w.sidebarTitle}
                 items={sidebarItems}
-                emptyText="No exercises yet. Add them in the Exercises tab."
+                emptyText={m.training.sidebarEmpty}
             >
                 <Typography variant="h6">{DAY_NAMES[today]}</Typography>
                 {notice && <Typography color="text.secondary" sx={{ mt: 1 }}>{notice}</Typography>}
 
                 {loading ? (
-                    <Typography sx={{ mt: 2 }}>Loading...</Typography>
+                    <Typography sx={{ mt: 2 }}>{m.common.loading}</Typography>
                 ) : loadError ? (
-                    <Typography color="error" sx={{ mt: 2 }}>Failed to load today's workout.</Typography>
+                    <Typography color="error" sx={{ mt: 2 }}>{w.failedToLoad}</Typography>
                 ) : (
                     <TodayDropZone highlight={!!dragging}>
                         {items.length === 0 ? (
                             <Typography sx={{ p: 2 }}>
-                                Nothing planned for {DAY_NAMES[today]}. Add exercises in the{' '}
-                                <Link component={RouterLink} to="/training?tab=plan">Plan</Link>
+                                {w.nothingPlanned(DAY_NAMES[today])}
+                                <Link component={RouterLink} to="/training?tab=plan">{w.planLink}</Link>
                                 {/* Only where the exercise list is shown */}
-                                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>, or drag them here</Box>.
+                                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{w.orDragHere}</Box>.
                             </Typography>
                         ) : (
                             <Stack spacing={2}>
@@ -360,23 +362,23 @@ export default function Workout() {
                                                         <Typography variant="h6">{it.name}</Typography>
                                                         {(it.category || !it.planned) && (
                                                             <Typography variant="body2" color="text.secondary">
-                                                                {[it.category, !it.planned && 'Not planned'].filter(Boolean).join(' · ')}
+                                                                {[it.category, !it.planned && w.notPlanned].filter(Boolean).join(' · ')}
                                                             </Typography>
                                                         )}
                                                     </Box>
                                                     {newMax && (
-                                                        <Chip color="warning" size="small" icon={<TrophyIcon />} label="New max" />
+                                                        <Chip color="warning" size="small" icon={<TrophyIcon />} label={w.newMax} />
                                                     )}
                                                     {done && (
                                                         <Chip
                                                             color={isEditing ? 'default' : 'success'}
                                                             size="small"
                                                             icon={isEditing ? <EditIcon /> : <CheckIcon />}
-                                                            label={isEditing ? 'Editing' : 'Logged'}
+                                                            label={isEditing ? w.editing : w.logged}
                                                         />
                                                     )}
                                                     {!it.planned && !done && (
-                                                        <IconButton aria-label={`Remove ${it.name} from today`} size="small" onClick={() => removeExtra(id)}>
+                                                        <IconButton aria-label={w.removeFromToday(it.name)} size="small" onClick={() => removeExtra(id)}>
                                                             <CloseIcon fontSize="small" />
                                                         </IconButton>
                                                     )}
@@ -385,12 +387,12 @@ export default function Workout() {
                                                 <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', columnGap: 3 }}>
                                                     <Typography variant="body2" color="text.secondary">
                                                         {previous.length > 0
-                                                            ? `Previous workout: ${formatDate(previous[0].createdAt)}`
-                                                            : 'No previous workout'}
+                                                            ? w.previousWorkout(formatDate(previous[0].createdAt))
+                                                            : w.noPreviousWorkout}
                                                     </Typography>
                                                     {best && (
                                                         <Typography variant="body2" color="text.secondary">
-                                                            Max:{' '}
+                                                            {w.max}{' '}
                                                             <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
                                                                 {formatSet(best)}
                                                             </Box>
@@ -405,12 +407,12 @@ export default function Workout() {
                                                         const removable = !locked && sets.length > 1
                                                         return (
                                                             <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                                <Typography sx={{ width: 48, flexShrink: 0 }}>Set {i + 1}</Typography>
+                                                                <Typography sx={{ width: 48, flexShrink: 0 }}>{m.training.set(i + 1)}</Typography>
                                                                 {(['reps', 'kg'] as const).map((field) => (
                                                                     <TextField
                                                                         key={field}
                                                                         size="small"
-                                                                        label={field === 'reps' ? 'Reps' : 'Kg'}
+                                                                        label={field === 'reps' ? w.repsField : w.kgField}
                                                                         type="number"
                                                                         value={row[field]}
                                                                         placeholder={prev ? String(prev[field] ?? '') : ''}
@@ -427,7 +429,7 @@ export default function Workout() {
                                                                 ))}
                                                                 <TextField
                                                                     size="small"
-                                                                    label="Notes"
+                                                                    label={m.common.notes}
                                                                     value={row.notes}
                                                                     placeholder={prev?.notes ?? ''}
                                                                     onChange={(e) => setField(id, i, 'notes', e.target.value)}
@@ -437,7 +439,7 @@ export default function Workout() {
                                                                 />
                                                                 {!locked && (
                                                                     <IconButton
-                                                                        aria-label={`Remove set ${i + 1}`}
+                                                                        aria-label={w.removeSet(i + 1)}
                                                                         size="small"
                                                                         disabled={!removable || saving === id}
                                                                         onClick={() => updateSets(id, (rows) => rows.filter((_, j) => j !== i))}
@@ -455,7 +457,7 @@ export default function Workout() {
                                                 {locked ? (
                                                     <Box sx={{ mt: 2, textAlign: 'right' }}>
                                                         <Button key="edit" startIcon={<EditIcon />} onClick={() => startEditing(id)}>
-                                                            Edit
+                                                            {m.common.edit}
                                                         </Button>
                                                     </Box>
                                                 ) : (
@@ -468,18 +470,18 @@ export default function Workout() {
                                                             }
                                                             disabled={saving === id}
                                                         >
-                                                            Add set
+                                                            {w.addSet}
                                                         </Button>
                                                         <Box sx={{ display: 'flex', gap: 1 }}>
                                                             {isEditing && (
                                                                 <Button key="cancel" onClick={() => stopEditing(id)} disabled={saving === id}>
-                                                                    Cancel
+                                                                    {m.common.cancel}
                                                                 </Button>
                                                             )}
                                                             <Button key="submit" type="submit" variant="contained" disabled={saving === id}>
                                                                 {isEditing
-                                                                    ? (saving === id ? 'Saving…' : 'Save')
-                                                                    : (saving === id ? 'Logging…' : 'Log')}
+                                                                    ? (saving === id ? m.common.saving : m.common.save)
+                                                                    : (saving === id ? w.logging : w.log)}
                                                             </Button>
                                                         </Box>
                                                     </Box>

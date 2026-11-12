@@ -1,5 +1,6 @@
 import { Box, Tab, Tabs, Typography } from '@mui/material'
 import { useTabParam } from '../lib/useTabParam'
+import { useT } from '../i18n'
 import Workout from '../components/training/Workout'
 import Schedule from '../components/training/Schedule'
 import ExercisesList from '../components/training/ExercisesList'
@@ -9,18 +10,19 @@ const TABS = ['today', 'plan', 'exercises', 'history', 'progress'] as const
 
 export default function Training() {
     const [tab, setTab] = useTabParam(TABS)
+    const m = useT()
 
     return (
         <>
-            <Typography variant="h5">Training</Typography>
+            <Typography variant="h5">{m.training.title}</Typography>
 
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
                 <Tabs value={tab} onChange={(_, value: (typeof TABS)[number]) => setTab(value)} variant="scrollable" allowScrollButtonsMobile>
-                    <Tab value="today" label="Today" />
-                    <Tab value="plan" label="Plan" />
-                    <Tab value="exercises" label="Exercises" />
-                    <Tab value="history" label="History" />
-                    <Tab value="progress" label="Progress" />
+                    <Tab value="today" label={m.training.tabs.today} />
+                    <Tab value="plan" label={m.training.tabs.plan} />
+                    <Tab value="exercises" label={m.training.tabs.exercises} />
+                    <Tab value="history" label={m.training.tabs.history} />
+                    <Tab value="progress" label={m.training.tabs.progress} />
                 </Tabs>
             </Box>
 

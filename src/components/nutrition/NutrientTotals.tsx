@@ -3,6 +3,7 @@ import { Box, Collapse, Divider, IconButton, LinearProgress, Paper, Tooltip, Typ
 import { ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
 import { NUTRIENTS, formatNutrient, sumNutrients, type NutrientKey, type Nutrients } from '../../lib/nutrition'
 import type { NutritionGoalsRow } from '../../types/entityTypes'
+import { useT } from '../../i18n'
 
 // One food of the day, with what it brings. Several with the same key (the same food in two
 // meals) are added up into one line.
@@ -58,6 +59,7 @@ function goalStatus(key: NutrientKey, value: number, goal: number): GoalStatus {
 
 // A day's totals against the goals, one tile per nutrient
 export default function NutrientTotals({ totals, goals, sources }: Props) {
+    const m = useT()
     const merged = sources ? mergeSources(sources) : []
     const [open, setOpen] = useState(readOpen)
     const hasFoods = merged.length > 0
@@ -76,11 +78,11 @@ export default function NutrientTotals({ totals, goals, sources }: Props) {
         <>
         {hasFoods && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 0.5 }}>
-                <Tooltip title={open ? 'Hide foods' : 'Show foods'}>
+                <Tooltip title={open ? m.nutrition.totals.hideFoods : m.nutrition.totals.showFoods}>
                     <IconButton
                         size="small"
                         onClick={toggle}
-                        aria-label={open ? 'Hide foods' : 'Show foods'}
+                        aria-label={open ? m.nutrition.totals.hideFoods : m.nutrition.totals.showFoods}
                         aria-expanded={open}
                     >
                         {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
@@ -113,7 +115,7 @@ export default function NutrientTotals({ totals, goals, sources }: Props) {
                                 variant="determinate"
                                 color={status}
                                 value={Math.min(100, (value / goal) * 100)}
-                                aria-label={`${label} against goal`}
+                                aria-label={m.nutrition.totals.againstGoal(label)}
                                 sx={{ my: 0.75, height: 6, borderRadius: 3 }}
                             />
                         )}
@@ -122,16 +124,16 @@ export default function NutrientTotals({ totals, goals, sources }: Props) {
                             color={status && status !== 'success' ? `${status}.main` : 'text.secondary'}
                         >
                             {diff === null
-                                ? 'No goal'
+                                ? m.nutrition.totals.noGoal
                                 : diff >= 0
-                                    ? `${formatNutrient(diff, key)} ${unit} left`
-                                    : `${formatNutrient(-diff, key)} ${unit} over`}
+                                    ? m.nutrition.totals.left(`${formatNutrient(diff, key)} ${unit}`)
+                                    : m.nutrition.totals.over(`${formatNutrient(-diff, key)} ${unit}`)}
                         </Typography>
 
                         {ranked.length > 0 && (
                             <Collapse in={open}>
                                 <Divider sx={{ my: 1 }} />
-                                <Box component="ol" aria-label={`${label} by food`} sx={{ m: 0, p: 0, listStyle: 'none' }}>
+                                <Box component="ol" aria-label={m.nutrition.totals.byFood(label)} sx={{ m: 0, p: 0, listStyle: 'none' }}>
                                     {ranked.map((s) => (
                                         <Box
                                             component="li"

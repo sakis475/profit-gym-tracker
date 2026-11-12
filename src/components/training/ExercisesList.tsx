@@ -21,10 +21,13 @@ import {
     MenuItem,
 } from '@mui/material'
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material'
+import { useT } from '../../i18n'
 
 type SortBy = 'category' | 'name'
 
 export default function ExercisesList() {
+    const m = useT()
+    const x = m.training.exercises
     const [items, setItems] = useState<ExerciseRow[] | null>(null)
     const [loading, setLoading] = useState(false)
     const [modalOpen, setModalOpen] = useState(false)
@@ -70,7 +73,7 @@ export default function ExercisesList() {
         e?.preventDefault()
         setError(null)
         if (!name.trim()) {
-            setError('Name is required')
+            setError(x.nameRequired)
             return
         }
         setCreating(true)
@@ -83,7 +86,7 @@ export default function ExercisesList() {
             : await createExercise(payload as ExerciseInsert)
         setCreating(false)
         if (!res) {
-            setError(editing ? 'Failed to update exercise' : 'Failed to create exercise')
+            setError(editing ? x.failedToUpdate : x.failedToCreate)
             return
         }
         closeModal()
@@ -96,7 +99,7 @@ export default function ExercisesList() {
         const res = await deleteExercise(deleting.id)
         setDeleteBusy(false)
         if (!res) {
-            setError('Failed to delete exercise')
+            setError(x.failedToDelete)
             return
         }
         setDeleting(null)
@@ -129,42 +132,42 @@ export default function ExercisesList() {
         <>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => openModal()}>
-                    Add exercise
+                    {x.add}
                 </Button>
             </Box>
 
             <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
                 <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel id="filter-category-label">Filter by category</InputLabel>
+                    <InputLabel id="filter-category-label">{x.filterByCategory}</InputLabel>
                     <Select
                         labelId="filter-category-label"
-                        label="Filter by category"
+                        label={x.filterByCategory}
                         value={filterCategory}
                         onChange={(e) => setFilterCategory(e.target.value)}
                     >
-                        <MenuItem value="">All categories</MenuItem>
+                        <MenuItem value="">{x.allCategories}</MenuItem>
                         {availableCategories.map((cat) => (
                             <MenuItem key={cat} value={cat}>{cat}</MenuItem>
                         ))}
                     </Select>
                 </FormControl>
                 <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel id="sort-by-label">Sort by</InputLabel>
+                    <InputLabel id="sort-by-label">{x.sortBy}</InputLabel>
                     <Select
                         labelId="sort-by-label"
-                        label="Sort by"
+                        label={x.sortBy}
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as SortBy)}
                     >
-                        <MenuItem value="category">Category</MenuItem>
-                        <MenuItem value="name">Name</MenuItem>
+                        <MenuItem value="category">{x.category}</MenuItem>
+                        <MenuItem value="name">{x.name}</MenuItem>
                     </Select>
                 </FormControl>
             </Box>
 
             <Box sx={{ minHeight: '60vh' }}>
                 {loading && !items ? (
-                    <Typography>Loading...</Typography>
+                    <Typography>{m.common.loading}</Typography>
                 ) : (
                     <List>
                         {displayedItems.length > 0 ? (
@@ -173,10 +176,10 @@ export default function ExercisesList() {
                                     key={it.id}
                                     secondaryAction={
                                         <>
-                                            <IconButton aria-label="Edit exercise" onClick={() => openModal(it)}>
+                                            <IconButton aria-label={x.editAria} onClick={() => openModal(it)}>
                                                 <EditIcon />
                                             </IconButton>
-                                            <IconButton aria-label="Delete exercise" onClick={() => { setError(null); setDeleting(it) }}>
+                                            <IconButton aria-label={x.deleteAria} onClick={() => { setError(null); setDeleting(it) }}>
                                                 <DeleteIcon />
                                             </IconButton>
                                         </>
@@ -186,18 +189,18 @@ export default function ExercisesList() {
                                 </ListItem>
                             ))
                         ) : (
-                            <Typography>No exercises found.</Typography>
+                            <Typography>{x.none}</Typography>
                         )}
                     </List>
                 )}
             </Box>
 
             <Dialog open={modalOpen} onClose={closeModal}>
-                <DialogTitle>{editing ? 'Edit exercise' : 'Create exercise'}</DialogTitle>
+                <DialogTitle>{editing ? x.editTitle : x.createTitle}</DialogTitle>
                 <form onSubmit={handleSubmit}>
                     <DialogContent>
                         <TextField
-                            label="Name"
+                            label={x.name}
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             fullWidth
@@ -209,29 +212,29 @@ export default function ExercisesList() {
                             options={categories}
                             inputValue={category}
                             onInputChange={(_, value) => setCategory(value)}
-                            renderInput={(params) => <TextField {...params} label="Category" />}
+                            renderInput={(params) => <TextField {...params} label={x.category} />}
                         />
                         {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                     </DialogContent>
                     <DialogActions>
-                        <Button onClick={closeModal} disabled={creating}>Cancel</Button>
+                        <Button onClick={closeModal} disabled={creating}>{m.common.cancel}</Button>
                         <Button type="submit" variant="contained" disabled={creating}>
-                            {editing ? (creating ? 'Saving…' : 'Save') : (creating ? 'Creating…' : 'Create')}
+                            {editing ? (creating ? m.common.saving : m.common.save) : (creating ? m.common.creating : m.common.create)}
                         </Button>
                     </DialogActions>
                 </form>
             </Dialog>
 
             <Dialog open={!!deleting} onClose={() => setDeleting(null)}>
-                <DialogTitle>Delete exercise</DialogTitle>
+                <DialogTitle>{x.deleteTitle}</DialogTitle>
                 <DialogContent>
-                    <Typography>Delete "{deleting?.name}"?</Typography>
+                    <Typography>{deleting && x.deleteConfirm(deleting.name)}</Typography>
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setDeleting(null)} disabled={deleteBusy}>Cancel</Button>
+                    <Button onClick={() => setDeleting(null)} disabled={deleteBusy}>{m.common.cancel}</Button>
                     <Button color="error" variant="contained" onClick={handleDelete} disabled={deleteBusy}>
-                        {deleteBusy ? 'Deleting…' : 'Delete'}
+                        {deleteBusy ? m.common.deleting : m.common.delete}
                     </Button>
                 </DialogActions>
             </Dialog>

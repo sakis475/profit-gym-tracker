@@ -29,6 +29,7 @@ import {
 import { NUTRIENTS, formatNutrientWithUnit } from '../lib/nutrition'
 import { dayKey, formatNumber, startOfWeek } from '../lib/workoutStats'
 import type { BodyWeightRow, NutritionGoalsRow } from '../types/entityTypes'
+import { locale, useT } from '../i18n'
 
 type Form = {
     birthDate: string
@@ -66,10 +67,12 @@ async function load(): Promise<Loaded | null> {
 
 function formatDate(key: string) {
     const [y, m, d] = key.split('-').map(Number)
-    return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    return new Date(y, m - 1, d).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function Profile() {
+    const t = useT()
+    const p = t.profile
     // undefined while loading, null when it failed
     const [data, setData] = useState<Loaded | null | undefined>(undefined)
     const [form, setForm] = useState<Form | null>(null)
@@ -89,8 +92,8 @@ export default function Profile() {
         }
     }, [version])
 
-    if (data === undefined || (data && !form)) return <Typography>Loading...</Typography>
-    if (data === null || !form) return <Typography color="error">Failed to load your profile.</Typography>
+    if (data === undefined || (data && !form)) return <Typography>{t.common.loading}</Typography>
+    if (data === null || !form) return <Typography color="error">{p.failedToLoad}</Typography>
 
     const age = form.birthDate ? ageFrom(form.birthDate) : null
     const height = Number(form.heightCm)
@@ -118,9 +121,9 @@ export default function Profile() {
 
     // Saves the details and the weight. Returns an error message, or null when saved.
     async function saveDetails(): Promise<string | null> {
-        if (!form) return 'Nothing to save'
-        if (form.heightCm && !(height > 0)) return 'Height must be more than 0'
-        if (form.weightKg && !(weight > 0)) return 'Weight must be more than 0'
+        if (!form) return p.nothingToSave
+        if (form.heightCm && !(height > 0)) return p.heightPositive
+        if (form.weightKg && !(weight > 0)) return p.weightPositive
 
         const saved = await saveProfile({
             birthDate: form.birthDate || null,
@@ -129,9 +132,9 @@ export default function Profile() {
             activityLevel: form.activityLevel || null,
             goal: form.goal || null,
         })
-        if (!saved) return 'Failed to save your profile'
+        if (!saved) return p.failedToSaveProfile
         // The weight is kept as a weigh-in, so the weight progress has it too
-        if (weightChanged && !(await saveBodyWeight(thisMonday, weight, null))) return 'Failed to save your weight'
+        if (weightChanged && !(await saveBodyWeight(thisMonday, weight, null))) return p.failedToSaveWeight
         return null
     }
 
@@ -142,7 +145,7 @@ export default function Profile() {
         const error = await saveDetails()
         setSaving(false)
         if (error) return setMessage({ text: error, error: true })
-        setMessage({ text: 'Profile saved', error: false })
+        setMessage({ text: p.saved, error: false })
         setVersion((v) => v + 1)
     }
 
@@ -155,7 +158,7 @@ export default function Profile() {
         const error = await saveDetails()
         if (error) {
             setSaving(false)
-            return setMessage({ text: `${error}. Your daily goals were not changed.`, error: true })
+            return setMessage({ text: p.goalsNotChanged(error), error: true })
         }
         const res = await saveGoals({
             kcal: targets.kcal,
@@ -165,8 +168,8 @@ export default function Profile() {
             fiber: targets.fiber,
         })
         setSaving(false)
-        if (!res) return setMessage({ text: 'Profile saved, but updating your daily goals failed', error: true })
-        setMessage({ text: 'Profile saved, and your daily goals now use these targets', error: false })
+        if (!res) return setMessage({ text: p.savedGoalsFailed, error: true })
+        setMessage({ text: p.savedWithGoals, error: false })
         setVersion((v) => v + 1)
     }
 
@@ -174,7 +177,7 @@ export default function Profile() {
 
     return (
         <>
-            <Typography variant="h5">Profile</Typography>
+            <Typography variant="h5">{p.title}</Typography>
 
             <Box
                 sx={{
@@ -186,19 +189,19 @@ export default function Profile() {
                 }}
             >
                 <Paper variant="outlined" sx={{ p: 2 }} component="form" onSubmit={handleSave}>
-                    <Typography variant="h6" sx={{ mb: 2 }}>About you</Typography>
+                    <Typography variant="h6" sx={{ mb: 2 }}>{p.aboutYou}</Typography>
 
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 2 }}>
                         <TextField
-                            label="Birth date"
+                            label={p.birthDate}
                             type="date"
                             value={form.birthDate}
                             onChange={(e) => set('birthDate', e.target.value)}
                             InputLabelProps={{ shrink: true }}
-                            helperText={age !== null ? `${age} years old` : ' '}
+                            helperText={age !== null ? p.yearsOld(age) : ' '}
                         />
                         <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>Sex</Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>{p.sex}</Typography>
                             <ToggleButtonGroup
                                 exclusive
                                 fullWidth
@@ -206,32 +209,32 @@ export default function Profile() {
                                 color="primary"
                                 value={form.sex}
                                 onChange={(_, value: Sex | null) => value && set('sex', value)}
-                                aria-label="Sex"
+                                aria-label={p.sex}
                             >
-                                <ToggleButton value="male">Male</ToggleButton>
-                                <ToggleButton value="female">Female</ToggleButton>
+                                <ToggleButton value="male">{p.male}</ToggleButton>
+                                <ToggleButton value="female">{p.female}</ToggleButton>
                             </ToggleButtonGroup>
                         </Box>
                         <TextField
-                            label="Height"
+                            label={p.height}
                             type="number"
                             value={form.heightCm}
                             onChange={(e) => set('heightCm', e.target.value)}
                             inputProps={{ min: 0, step: 1, inputMode: 'decimal' }}
-                            InputProps={{ endAdornment: <InputAdornment position="end">cm</InputAdornment> }}
+                            InputProps={{ endAdornment: <InputAdornment position="end">{t.units.cm}</InputAdornment> }}
                         />
                         <TextField
-                            label="Weight"
+                            label={p.weight}
                             type="number"
                             value={form.weightKg}
                             onChange={(e) => set('weightKg', e.target.value)}
                             inputProps={{ min: 0, step: 0.1, inputMode: 'decimal' }}
-                            InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+                            InputProps={{ endAdornment: <InputAdornment position="end">{t.units.kg}</InputAdornment> }}
                             helperText={
                                 weightChanged
-                                    ? "Saved as this week's weigh-in"
+                                    ? p.savedAsWeighIn
                                     : data.latestWeight
-                                        ? `Weigh-in of ${formatDate(data.latestWeight.date)}`
+                                        ? p.weighInOf(formatDate(data.latestWeight.date))
                                         : ' '
                             }
                         />
@@ -239,7 +242,7 @@ export default function Profile() {
 
                     <TextField
                         select
-                        label="Activity level"
+                        label={p.activityLevel}
                         value={form.activityLevel}
                         onChange={(e) => set('activityLevel', e.target.value as ActivityLevel)}
                         fullWidth
@@ -257,7 +260,7 @@ export default function Profile() {
                     </TextField>
                     <TextField
                         select
-                        label="Goal"
+                        label={p.goal}
                         value={form.goal}
                         onChange={(e) => set('goal', e.target.value as Goal)}
                         fullWidth
@@ -284,37 +287,36 @@ export default function Profile() {
                             {message?.text}
                         </Typography>
                         <Button type="submit" variant="contained" disabled={saving}>
-                            {saving ? 'Saving…' : 'Save'}
+                            {saving ? t.common.saving : t.common.save}
                         </Button>
                     </Box>
                 </Paper>
 
                 <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="h6">Daily targets</Typography>
+                    <Typography variant="h6">{p.dailyTargets}</Typography>
                     {!targets ? (
                         <Typography color="text.secondary" sx={{ mt: 1 }}>
-                            Fill in everything about you to see your daily targets.
+                            {p.fillIn}
                         </Typography>
                     ) : (
                         <>
                             <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mt: 1 }}>
                                 <Box>
-                                    <Typography variant="body2" color="text.secondary">At rest</Typography>
-                                    <Typography variant="h6">{formatNumber(targets.bmr, 0)} kcal</Typography>
+                                    <Typography variant="body2" color="text.secondary">{p.atRest}</Typography>
+                                    <Typography variant="h6">{formatNumber(targets.bmr, 0)} {t.units.kcal}</Typography>
                                 </Box>
                                 <Box>
-                                    <Typography variant="body2" color="text.secondary">Maintenance</Typography>
-                                    <Typography variant="h6">{formatNumber(targets.maintenance, 0)} kcal</Typography>
+                                    <Typography variant="body2" color="text.secondary">{p.maintenance}</Typography>
+                                    <Typography variant="h6">{formatNumber(targets.maintenance, 0)} {t.units.kcal}</Typography>
                                 </Box>
                                 <Box>
-                                    <Typography variant="body2" color="text.secondary">For your goal</Typography>
-                                    <Typography variant="h6">{formatNumber(targets.kcal, 0)} kcal</Typography>
+                                    <Typography variant="body2" color="text.secondary">{p.forGoal}</Typography>
+                                    <Typography variant="h6">{formatNumber(targets.kcal, 0)} {t.units.kcal}</Typography>
                                 </Box>
                             </Box>
                             {targets.floored && (
                                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                                    Your goal would go below {formatNumber(targets.kcal, 0)} kcal, the lowest usually advised without a
-                                    doctor or dietitian, so the target stops there.
+                                    {p.floored(formatNumber(targets.kcal, 0))}
                                 </Typography>
                             )}
 
@@ -322,8 +324,8 @@ export default function Profile() {
                                 <TableHead>
                                     <TableRow>
                                         <TableCell />
-                                        <TableCell align="right">Suggested</TableCell>
-                                        <TableCell align="right">Your goal now</TableCell>
+                                        <TableCell align="right">{p.suggested}</TableCell>
+                                        <TableCell align="right">{p.goalNow}</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -346,16 +348,12 @@ export default function Profile() {
 
                             <Box sx={{ textAlign: 'right', mt: 2 }}>
                                 <Button variant="contained" onClick={applyTargets} disabled={saving || sameAsGoals}>
-                                    {sameAsGoals ? 'These are your daily goals' : 'Save and use as my daily goals'}
+                                    {sameAsGoals ? p.theseAreGoals : p.useAsGoals}
                                 </Button>
                             </Box>
 
                             <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 2 }}>
-                                Calories at rest use the Mifflin-St Jeor formula, times your activity level for maintenance,
-                                then adjusted for your goal. Protein is{' '}
-                                {GOALS.find((g) => g.value === form.goal)!.proteinPerKg} g per kg of body weight, fat 25% of the
-                                calories, carbs the rest, and fiber 14 g per 1,000 kcal. These are estimates to start from: if
-                                your weekly weigh-ins don't move as expected after 2–3 weeks, adjust the calories by 100–200.
+                                {p.explanation(formatNumber(GOALS.find((g) => g.value === form.goal)!.proteinPerKg, 1))}
                             </Typography>
                         </>
                     )}

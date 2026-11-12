@@ -3,28 +3,31 @@ import { Alert, Avatar, Box, Button, Chip, InputAdornment, Link, Paper, Stack, T
 import { Add as AddIcon, Inventory2Outlined as PackageIcon, Search as SearchIcon } from '@mui/icons-material'
 import { isFromLibrary, searchPublicFoods, type PublicFood, type PublicSearch } from '../../services/foodLibrary'
 import { NUTRIENTS, formatNutrient } from '../../lib/nutrition'
+import { formatNumber } from '../../lib/workoutStats'
 import type { FoodRow } from '../../types/entityTypes'
+import { t, useT } from '../../i18n'
 
 // "68 kcal · P 9 g · C 3.6 g · F 2 g · Fib –", a dash where the label gives nothing
 function describeLabel(food: PublicFood) {
     return NUTRIENTS.map(({ key, short }) => {
         const value = food.nutrients[key]
         const shown = value === null ? '–' : formatNutrient(value, key)
-        return key === 'kcal' ? `${shown} kcal` : `${short} ${shown}${value === null ? '' : ' g'}`
+        return key === 'kcal' ? `${shown} ${t().units.kcal}` : `${short} ${shown}${value === null ? '' : ` ${t().units.g}`}`
     }).join(' · ')
 }
 
 function describeExtras(food: PublicFood) {
     const { saturatedFat, sugars, salt } = food.extras
     return [
-        saturatedFat !== null && `saturated fat ${formatNutrient(saturatedFat, 'fat')} g`,
-        sugars !== null && `sugars ${formatNutrient(sugars, 'carbs')} g`,
-        salt !== null && `salt ${formatNutrient(salt, 'fat')} g`,
+        saturatedFat !== null && t().nutrition.library.saturatedFat(formatNutrient(saturatedFat, 'fat')),
+        sugars !== null && t().nutrition.library.sugars(formatNutrient(sugars, 'carbs')),
+        salt !== null && t().nutrition.library.salt(formatNutrient(salt, 'fat')),
     ].filter(Boolean).join(' · ')
 }
 
 // Searches the Open Food Facts library; a product picked opens the add food form, filled in
 export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; onAdd: (food: PublicFood) => void }) {
+    const m = useT()
     const [query, setQuery] = useState('')
     // The search shown, with the pages loaded so far
     const [result, setResult] = useState<{ query: string; search: PublicSearch } | null>(null)
@@ -40,7 +43,7 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
         try {
             setResult({ query: q, search: await searchPublicFoods(q) })
         } catch {
-            setError("The food library couldn't be reached. Try again in a moment.")
+            setError(m.nutrition.library.unreachable)
         }
         setLoading(false)
     }
@@ -53,7 +56,7 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
             const next = await searchPublicFoods(result.query, result.search.page + 1)
             setResult({ query: result.query, search: { ...next, foods: [...result.search.foods, ...next.foods] } })
         } catch {
-            setError("More results couldn't be loaded. Try again in a moment.")
+            setError(m.nutrition.library.moreFailed)
         }
         setLoading(false)
     }
@@ -63,18 +66,17 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
     return (
         <>
             <Alert severity="warning" sx={{ mb: 2 }}>
-                These foods come from{' '}
+                {m.nutrition.library.warningBefore}
                 <Link href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer" color="inherit">
                     Open Food Facts
                 </Link>
-                , a public database filled in by volunteers and open under the Open Database License. It is not part of
-                this app, and its values can be missing or wrong: check them against the pack before you add a food.
+                {m.nutrition.library.warningAfter}
             </Alert>
 
             <Box component="form" onSubmit={search} sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <TextField
                     size="small"
-                    placeholder="Search, e.g. γιαούρτι στραγγιστό or oats"
+                    placeholder={m.nutrition.library.placeholder}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     sx={{ flex: '1 1 240px' }}
@@ -87,22 +89,21 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
                     }}
                 />
                 <Button type="submit" variant="contained" disabled={loading || !query.trim()}>
-                    {loading && !result?.search.foods.length ? 'Searching…' : 'Search'}
+                    {loading && !result?.search.foods.length ? m.common.searching : m.common.search}
                 </Button>
             </Box>
             {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
 
             {!result ? (
                 <Typography color="text.secondary" sx={{ mt: 2 }}>
-                    Search millions of packaged foods, Greek ones first. Pick one to add it to your foods; you can check
-                    and change its values before it is saved.
+                    {m.nutrition.library.intro}
                 </Typography>
             ) : (
                 <>
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
                         {result.search.total === 0
-                            ? `Nothing found for "${result.query}".`
-                            : `${result.search.total.toLocaleString()} found for "${result.query}". Values are per 100 g or 100 ml.`}
+                            ? m.nutrition.library.nothingFound(result.query)
+                            : m.nutrition.library.found(formatNumber(result.search.total, 0), result.query)}
                     </Typography>
                     <Stack spacing={1} sx={{ mt: 1 }}>
                         {result.search.foods.map((food) => {
@@ -126,19 +127,19 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
                                             </Typography>
                                         )}
                                         <Typography variant="body2" color="text.secondary">
-                                            {food.nutrients.kcal === null ? 'No nutrition values on record' : describeLabel(food)}
+                                            {food.nutrients.kcal === null ? m.nutrition.library.noValues : describeLabel(food)}
                                         </Typography>
                                         {extras && (
                                             <Typography variant="caption" color="text.secondary" component="div">
-                                                Also: {extras}
+                                                {m.nutrition.library.also(extras)}
                                             </Typography>
                                         )}
                                     </Box>
                                     {added ? (
-                                        <Chip size="small" label="In your foods" />
+                                        <Chip size="small" label={m.nutrition.library.inYourFoods} />
                                     ) : (
                                         <Button size="small" startIcon={<AddIcon />} onClick={() => onAdd(food)} sx={{ flexShrink: 0 }}>
-                                            Add
+                                            {m.common.add}
                                         </Button>
                                     )}
                                 </Paper>
@@ -147,7 +148,7 @@ export default function PublicLibrary({ myFoods, onAdd }: { myFoods: FoodRow[]; 
                     </Stack>
                     {result.search.page < result.search.pageCount && (
                         <Box sx={{ textAlign: 'center', mt: 2 }}>
-                            <Button onClick={showMore} disabled={loading}>{loading ? 'Loading…' : 'Show more'}</Button>
+                            <Button onClick={showMore} disabled={loading}>{loading ? m.common.loadingShort : m.common.showMore}</Button>
                         </Box>
                     )}
                 </>

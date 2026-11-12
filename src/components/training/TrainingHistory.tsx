@@ -6,6 +6,7 @@ import { groupSessions, NO_FILTERS, type LogFilters } from '../../lib/workoutSta
 import type { WorkoutWithExercise } from '../../types/entityTypes'
 import HistoryLog from './HistoryLog'
 import ProgressStats from './ProgressStats'
+import { useT } from '../../i18n'
 
 type Props = {
     view: 'history' | 'progress'
@@ -17,6 +18,7 @@ type Props = {
 // so the log's filters and the chosen exercise carry over; coming back from another tab loads
 // the history again, with whatever was logged meanwhile.
 export default function TrainingHistory({ view, onShowProgress }: Props) {
+    const m = useT()
     const [rows, setRows] = useState<WorkoutWithExercise[]>([])
     const [loading, setLoading] = useState(true)
     const [loadError, setLoadError] = useState(false)
@@ -40,7 +42,9 @@ export default function TrainingHistory({ view, onShowProgress }: Props) {
         }
     }, [])
 
-    const sessions = useMemo(() => groupSessions(rows), [rows])
+    // An exercise without a name gets the current language's "Unknown exercise"
+    const unknownName = m.training.unknownExercise
+    const sessions = useMemo(() => groupSessions(rows, unknownName), [rows, unknownName])
 
     function changeFilters(next: LogFilters) {
         setFilters(next)
@@ -53,13 +57,13 @@ export default function TrainingHistory({ view, onShowProgress }: Props) {
         window.scrollTo({ top: 0 })
     }
 
-    if (loading) return <Typography>Loading...</Typography>
-    if (loadError) return <Typography color="error">Failed to load your workout history.</Typography>
+    if (loading) return <Typography>{m.common.loading}</Typography>
+    if (loadError) return <Typography color="error">{m.training.history.failedToLoad}</Typography>
     if (sessions.length === 0) {
         return (
             <Typography>
-                No workouts logged yet. Log your first one in the{' '}
-                <Link component={RouterLink} to="/training">Today</Link> tab.
+                {m.training.history.noneYet}
+                <Link component={RouterLink} to="/training">{m.training.history.todayLink}</Link>{m.training.history.tabSuffix}
             </Typography>
         )
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
@@ -8,7 +8,8 @@ import Training from './pages/Training'
 import Nutrition from './pages/Nutrition'
 import Profile from './pages/Profile'
 import Header from './components/Header'
-import { CssBaseline, Container } from '@mui/material'
+import { CssBaseline, Container, ThemeProvider, createTheme } from '@mui/material'
+import { useLanguage } from './i18n'
 
 // Keeps track of the page being shown, so the app opens there next time
 function RememberPage() {
@@ -21,6 +22,11 @@ function RememberPage() {
 
 function App() {
   const [user, setUser] = useState<any | null>(null)
+  // A change of language re-renders the app from here down, in place: nothing is remounted, so
+  // what is on screen (an open dialog, a typed value, the day shown) stays as it is
+  const language = useLanguage()
+  // MUI's own texts (e.g. "No options") in the same language
+  const theme = useMemo(() => createTheme({}, language.mui), [language])
 
   useEffect(() => {
     let mounted = true
@@ -48,7 +54,7 @@ function App() {
   }
 
   return (
-    <>
+    <ThemeProvider theme={theme}>
       <CssBaseline />
       <BrowserRouter>
         <RememberPage />
@@ -79,7 +85,7 @@ function App() {
           </Routes>
         </Container>
       </BrowserRouter>
-    </>
+    </ThemeProvider>
   )
 }
 

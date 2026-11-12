@@ -1,12 +1,14 @@
 import type { FoodContentRow, FoodRow } from '../types/entityTypes'
+import { t } from '../i18n'
 import { formatNumber } from './workoutStats'
 
+// The labels are getters, so they are read in the current language wherever these are used
 export const NUTRIENTS = [
-    { key: 'kcal', label: 'Calories', short: 'kcal', unit: 'kcal' },
-    { key: 'protein', label: 'Protein', short: 'P', unit: 'g' },
-    { key: 'carbs', label: 'Carbs', short: 'C', unit: 'g' },
-    { key: 'fat', label: 'Fat', short: 'F', unit: 'g' },
-    { key: 'fiber', label: 'Fiber', short: 'Fib', unit: 'g' },
+    { key: 'kcal', get label() { return t().nutrients.kcal.label }, get short() { return t().nutrients.kcal.short }, get unit() { return t().units.kcal } },
+    { key: 'protein', get label() { return t().nutrients.protein.label }, get short() { return t().nutrients.protein.short }, get unit() { return t().units.g } },
+    { key: 'carbs', get label() { return t().nutrients.carbs.label }, get short() { return t().nutrients.carbs.short }, get unit() { return t().units.g } },
+    { key: 'fat', get label() { return t().nutrients.fat.label }, get short() { return t().nutrients.fat.short }, get unit() { return t().units.g } },
+    { key: 'fiber', get label() { return t().nutrients.fiber.label }, get short() { return t().nutrients.fiber.short }, get unit() { return t().units.g } },
 ] as const
 
 export type NutrientKey = (typeof NUTRIENTS)[number]['key']
@@ -16,10 +18,10 @@ export const NO_NUTRIENTS: Nutrients = { kcal: 0, protein: 0, carbs: 0, fat: 0, 
 
 // A food's values are per 100 of a weight or volume unit, per 1 of a counted one
 export const FOOD_UNITS = [
-    { value: 'g', label: 'Grams', per: '100 g' },
-    { value: 'ml', label: 'Millilitres', per: '100 ml' },
-    { value: 'piece', label: 'Pieces', per: 'piece' },
-    { value: 'scoop', label: 'Scoops', per: 'scoop' },
+    { value: 'g', get label() { return t().foodUnits.g.label }, get per() { return t().foodUnits.g.per } },
+    { value: 'ml', get label() { return t().foodUnits.ml.label }, get per() { return t().foodUnits.ml.per } },
+    { value: 'piece', get label() { return t().foodUnits.piece.label }, get per() { return t().foodUnits.piece.per } },
+    { value: 'scoop', get label() { return t().foodUnits.scoop.label }, get per() { return t().foodUnits.scoop.per } },
 ] as const
 
 export type FoodUnit = (typeof FOOD_UNITS)[number]['value']
@@ -77,12 +79,13 @@ export function contentsNutrients(contents: FoodContent[]): Nutrients {
 // "125 kcal · P 13 g · C 1 g · F 9 g · Fib 0 g"
 export function describeNutrients(n: Nutrients) {
     return NUTRIENTS.map(({ key, short, unit }) =>
-        key === 'kcal' ? `${formatNutrient(n.kcal, key)} kcal` : `${short} ${formatNutrient(n[key], key)} ${unit}`
+        key === 'kcal' ? `${formatNutrient(n.kcal, key)} ${unit}` : `${short} ${formatNutrient(n[key], key)} ${unit}`
     ).join(' · ')
 }
 
+// "per 100 g · 125 kcal · P 13 g · …"
 export function describeFood(food: FoodRow) {
-    return `per ${unitPer(food.unit)} · ${describeNutrients(food)}`
+    return `${t().foodUnits.per(unitPer(food.unit))} · ${describeNutrients(food)}`
 }
 
 export function formatNutrient(value: number, key: NutrientKey) {
@@ -91,7 +94,7 @@ export function formatNutrient(value: number, key: NutrientKey) {
 }
 
 export function formatNutrientWithUnit(value: number, key: NutrientKey) {
-    return key === 'kcal' ? `${formatNutrient(value, key)} kcal` : `${formatNutrient(value, key)} g`
+    return `${formatNutrient(value, key)} ${key === 'kcal' ? t().units.kcal : t().units.g}`
 }
 
 export function unitPer(unit: string) {
@@ -105,9 +108,8 @@ export function formatQuantity(quantity: number, unit: string) {
         case 'ml':
             return `${amount} ${unit}`
         case 'piece':
-            return `${amount} ${quantity === 1 ? 'piece' : 'pcs'}`
         case 'scoop':
-            return `${amount} ${quantity === 1 ? 'scoop' : 'scoops'}`
+            return `${amount} ${t().foodUnits.count[unit](quantity)}`
         default:
             return `${amount} ${unit}`
     }
@@ -115,7 +117,7 @@ export function formatQuantity(quantity: number, unit: string) {
 
 // The short label used beside a quantity input
 export function quantityUnitLabel(unit: string) {
-    return unit === 'piece' ? 'pcs' : unit === 'scoop' ? 'scoops' : unit
+    return unit === 'piece' || unit === 'scoop' ? t().foodUnits.short[unit] : unit
 }
 
 // A YYYY-MM-DD date column as a local date (new Date('YYYY-MM-DD') would be UTC midnight)

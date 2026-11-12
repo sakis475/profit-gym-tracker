@@ -25,6 +25,7 @@ import {
     type Session,
     type SessionStats,
 } from '../../lib/workoutStats'
+import { locale, t, useT } from '../../i18n'
 
 type Props = {
     sessions: Session[]
@@ -34,11 +35,12 @@ type Props = {
 
 type Metric = 'e1rm' | 'topKg' | 'volume' | 'reps'
 
-const METRICS: { value: Metric; label: string; needsKg: boolean }[] = [
-    { value: 'e1rm', label: 'Est. 1RM', needsKg: true },
-    { value: 'topKg', label: 'Top weight', needsKg: true },
-    { value: 'volume', label: 'Volume', needsKg: true },
-    { value: 'reps', label: 'Total reps', needsKg: false },
+// The labels are in the translations, under training.progress.metrics
+const METRICS: { value: Metric; needsKg: boolean }[] = [
+    { value: 'e1rm', needsKg: true },
+    { value: 'topKg', needsKg: true },
+    { value: 'volume', needsKg: true },
+    { value: 'reps', needsKg: false },
 ]
 
 const CHART_WEEKS = 12
@@ -56,15 +58,15 @@ function metricValue(s: SessionWithStats, metric: Metric) {
 }
 
 function formatMetric(value: number, metric: Metric) {
-    return metric === 'reps' ? formatNumber(value, 0) : `${formatNumber(value, metric === 'volume' ? 0 : 1)} kg`
+    return metric === 'reps' ? formatNumber(value, 0) : `${formatNumber(value, metric === 'volume' ? 0 : 1)} ${t().units.kg}`
 }
 
 function formatShortDate(date: Date | string) {
-    return new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+    return new Date(date).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })
 }
 
 function formatDate(date: Date | string) {
-    return new Date(date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    return new Date(date).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 // The session with the highest value; the earliest one wins a tie, it set the record first
@@ -94,6 +96,9 @@ const tileGrid = {
 }
 
 export default function ProgressStats({ sessions, exerciseId, onSelectExercise }: Props) {
+    const m = useT()
+    const p = m.training.progress
+    const kg = m.units.kg
     const [metric, setMetric] = useState<Metric>('e1rm')
     const [shownSessions, setShownSessions] = useState(SESSIONS_PER_PAGE)
 
@@ -128,9 +133,9 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
         return Array.from({ length: CHART_WEEKS }, (_, i) => {
             const start = new Date(week)
             start.setDate(start.getDate() + 7 * i)
-            return { x: start.getTime(), y: counts.get(start.getTime()) ?? 0, label: `Week of ${formatShortDate(start)}` }
+            return { x: start.getTime(), y: counts.get(start.getTime()) ?? 0, label: p.weekOf(formatShortDate(start)) }
         })
-    }, [days])
+    }, [days, p])
 
     // Most done first, so the exercises worth tracking are at the top
     const exercises = useMemo(() => {
@@ -157,7 +162,7 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
     // Without any weight logged (e.g. bodyweight exercises) only reps say anything
     const hasKg = stats.some((s) => s.topSet)
     const activeMetric = hasKg ? metric : 'reps'
-    const metricLabel = METRICS.find((m) => m.value === activeMetric)!.label
+    const metricLabel = p.metrics[activeMetric]
 
     const points: TrendPoint[] = stats.flatMap((s) => {
         const y = metricValue(s, activeMetric)
@@ -174,27 +179,27 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
 
     return (
         <>
-            <Typography variant="h6">Overview</Typography>
+            <Typography variant="h6">{p.overview}</Typography>
             <Box sx={{ ...tileGrid, mt: 1 }}>
                 <StatTile
-                    label="Workouts"
+                    label={p.workouts}
                     value={String(days.length)}
-                    detail={overview.first && `since ${formatDate(overview.first)}`}
+                    detail={overview.first && p.since(formatDate(overview.first))}
                 />
-                <StatTile label="Last 30 days" value={String(overview.last30)} detail="workout days" />
-                <StatTile label="This week" value={String(overview.thisWeek)} detail="workout days" />
+                <StatTile label={p.last30} value={String(overview.last30)} detail={p.workoutDays} />
+                <StatTile label={p.thisWeek} value={String(overview.thisWeek)} detail={p.workoutDays} />
                 <StatTile
-                    label="Week streak"
+                    label={p.weekStreak}
                     value={String(overview.streak)}
-                    detail={overview.streak === 1 ? 'week in a row' : 'weeks in a row'}
+                    detail={p.weeksInARow(overview.streak)}
                 />
-                <StatTile label="Sets logged" value={formatNumber(overview.sets, 0)} detail="all time" />
-                <StatTile label="Volume" value={`${formatNumber(overview.volume30, 0)} kg`} detail="last 30 days" />
+                <StatTile label={p.setsLogged} value={formatNumber(overview.sets, 0)} detail={p.allTime} />
+                <StatTile label={p.volume} value={`${formatNumber(overview.volume30, 0)} ${kg}`} detail={p.last30Days} />
             </Box>
 
             <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-                    Workout days per week
+                    {p.workoutDaysPerWeek}
                 </Typography>
                 <TrendChart
                     kind="bar"
@@ -202,16 +207,16 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
                     points={weekly}
                     formatValue={(y) => formatNumber(y, 0)}
                     formatTick={(p) => formatShortDate(new Date(p.x))}
-                    ariaLabel={`Workout days per week over the last ${CHART_WEEKS} weeks`}
+                    ariaLabel={p.workoutDaysChartAria(CHART_WEEKS)}
                 />
             </Paper>
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 4 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Exercise progress</Typography>
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>{p.exerciseProgress}</Typography>
                 <TextField
                     select
                     size="small"
-                    label="Exercise"
+                    label={p.exercise}
                     value={selectedId ?? ''}
                     onChange={(e) => {
                         setShownSessions(SESSIONS_PER_PAGE)
@@ -232,35 +237,35 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
 
             <Box sx={{ ...tileGrid, mt: 1.5 }}>
                 <StatTile
-                    label="Sessions"
+                    label={p.sessions}
                     value={String(stats.length)}
-                    detail={stats.length > 0 ? `last on ${formatDate(stats[stats.length - 1].session.createdAt)}` : undefined}
+                    detail={stats.length > 0 ? p.lastOn(formatDate(stats[stats.length - 1].session.createdAt)) : undefined}
                 />
                 {heaviest?.topSet && (
-                    <StatTile label="Heaviest set" value={formatSet(heaviest.topSet)} detail={formatDate(heaviest.session.createdAt)} />
+                    <StatTile label={p.heaviestSet} value={formatSet(heaviest.topSet)} detail={formatDate(heaviest.session.createdAt)} />
                 )}
                 {best1RM?.best1RM != null && (
                     <StatTile
-                        label="Best est. 1RM"
-                        value={`${formatNumber(best1RM.best1RM, 1)} kg`}
+                        label={p.best1RM}
+                        value={`${formatNumber(best1RM.best1RM, 1)} ${kg}`}
                         detail={formatDate(best1RM.session.createdAt)}
                     />
                 )}
                 {mostReps?.maxReps != null && (
-                    <StatTile label="Most reps in a set" value={String(mostReps.maxReps)} detail={formatDate(mostReps.session.createdAt)} />
+                    <StatTile label={p.mostReps} value={String(mostReps.maxReps)} detail={formatDate(mostReps.session.createdAt)} />
                 )}
                 {bestVolume && (
                     <StatTile
-                        label="Best session volume"
-                        value={`${formatNumber(bestVolume.volume, 0)} kg`}
+                        label={p.bestVolume}
+                        value={`${formatNumber(bestVolume.volume, 0)} ${kg}`}
                         detail={formatDate(bestVolume.session.createdAt)}
                     />
                 )}
                 {kgChange !== null && stats.length > 1 && (
                     <StatTile
-                        label="Top weight change"
-                        value={`${kgChange > 0 ? '+' : ''}${formatNumber(kgChange, 2)} kg`}
-                        detail="since first session"
+                        label={p.topWeightChange}
+                        value={`${kgChange > 0 ? '+' : ''}${formatNumber(kgChange, 2)} ${kg}`}
+                        detail={p.sinceFirstSession}
                     />
                 )}
             </Box>
@@ -268,7 +273,7 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
             <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 500, flexGrow: 1 }}>
-                        {metricLabel} per session
+                        {p.perSession(metricLabel)}
                     </Typography>
                     <ToggleButtonGroup
                         size="small"
@@ -276,28 +281,28 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
                         value={activeMetric}
                         onChange={(_, value: Metric | null) => value && setMetric(value)}
                     >
-                        {METRICS.map((m) => (
-                            <ToggleButton key={m.value} value={m.value} disabled={m.needsKg && !hasKg} sx={{ textTransform: 'none' }}>
-                                {m.label}
+                        {METRICS.map((metric) => (
+                            <ToggleButton key={metric.value} value={metric.value} disabled={metric.needsKg && !hasKg} sx={{ textTransform: 'none' }}>
+                                {p.metrics[metric.value]}
                             </ToggleButton>
                         ))}
                     </ToggleButtonGroup>
                 </Box>
                 {points.length < 2 ? (
                     <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                        Log this exercise at least twice to see a trend.
+                        {p.needTwoSessions}
                     </Typography>
                 ) : (
                     <TrendChart
                         points={points}
                         formatValue={(y) => formatMetric(y, activeMetric)}
                         formatTick={(p) => formatShortDate(new Date(p.x))}
-                        ariaLabel={`${metricLabel} per session`}
+                        ariaLabel={p.perSession(metricLabel)}
                     />
                 )}
                 {activeMetric === 'e1rm' && points.length >= 2 && (
                     <Typography variant="caption" color="text.secondary">
-                        Estimated one-rep max of the best set (Epley formula).
+                        {p.e1rmNote}
                     </Typography>
                 )}
             </Paper>
@@ -306,10 +311,10 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
                 <Table size="small">
                     <TableHead>
                         <TableRow>
-                            <TableCell>Date</TableCell>
-                            <TableCell>Sets</TableCell>
-                            <TableCell align="right">Est. 1RM</TableCell>
-                            <TableCell align="right">Volume</TableCell>
+                            <TableCell>{p.date}</TableCell>
+                            <TableCell>{p.sets}</TableCell>
+                            <TableCell align="right">{p.metrics.e1rm}</TableCell>
+                            <TableCell align="right">{p.volume}</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -318,10 +323,10 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
                                 <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(s.session.createdAt)}</TableCell>
                                 <TableCell>{s.session.sets.map(formatSet).join(', ')}</TableCell>
                                 <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                    {s.best1RM !== null ? `${formatNumber(s.best1RM, 1)} kg` : '–'}
+                                    {s.best1RM !== null ? `${formatNumber(s.best1RM, 1)} ${kg}` : '–'}
                                 </TableCell>
                                 <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                    {s.volume > 0 ? `${formatNumber(s.volume, 0)} kg` : '–'}
+                                    {s.volume > 0 ? `${formatNumber(s.volume, 0)} ${kg}` : '–'}
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -329,7 +334,7 @@ export default function ProgressStats({ sessions, exerciseId, onSelectExercise }
                 </Table>
                 {shownSessions < stats.length && (
                     <Box sx={{ textAlign: 'center', p: 1 }}>
-                        <Button onClick={() => setShownSessions((n) => n + SESSIONS_PER_PAGE)}>Show more sessions</Button>
+                        <Button onClick={() => setShownSessions((n) => n + SESSIONS_PER_PAGE)}>{p.showMoreSessions}</Button>
                     </Box>
                 )}
             </Paper>

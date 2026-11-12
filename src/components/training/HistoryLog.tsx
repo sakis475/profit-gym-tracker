@@ -25,6 +25,7 @@ import {
     type LogFilters,
     type Session,
 } from '../../lib/workoutStats'
+import { locale, useT } from '../../i18n'
 
 type Props = {
     sessions: Session[]
@@ -38,18 +39,10 @@ type Props = {
 const DAYS_PER_PAGE = 10
 
 // Monday first, matching how weeks are counted; values are Date.getDay() numbers
-const WEEKDAYS = [
-    { value: 1, label: 'Mon' },
-    { value: 2, label: 'Tue' },
-    { value: 3, label: 'Wed' },
-    { value: 4, label: 'Thu' },
-    { value: 5, label: 'Fri' },
-    { value: 6, label: 'Sat' },
-    { value: 0, label: 'Sun' },
-]
+const WEEKDAYS = [1, 2, 3, 4, 5, 6, 0]
 
 function formatDay(date: Date) {
-    return date.toLocaleDateString(undefined, {
+    return date.toLocaleDateString(locale(), {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
@@ -58,6 +51,8 @@ function formatDay(date: Date) {
 }
 
 export default function HistoryLog({ sessions, filters, onFiltersChange, page, onPageChange, onSelectExercise }: Props) {
+    const m = useT()
+    const h = m.training.history
     const days = useMemo(() => groupByDay(sessions), [sessions])
     const filtered = useMemo(() => filterDays(days, filters), [days, filters])
 
@@ -84,7 +79,7 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                     <TextField
                         size="small"
-                        placeholder="Search exercise, category or notes"
+                        placeholder={h.searchPlaceholder}
                         value={filters.query}
                         onChange={(e) => setFilter('query', e.target.value)}
                         sx={{ flex: '1 1 240px' }}
@@ -96,7 +91,7 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                             ),
                             endAdornment: filters.query && (
                                 <InputAdornment position="end">
-                                    <IconButton size="small" aria-label="Clear search" onClick={() => setFilter('query', '')}>
+                                    <IconButton size="small" aria-label={h.clearSearch} onClick={() => setFilter('query', '')}>
                                         <CloseIcon fontSize="small" />
                                     </IconButton>
                                 </InputAdornment>
@@ -106,7 +101,7 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                     <TextField
                         size="small"
                         type="date"
-                        label="From"
+                        label={h.from}
                         value={filters.from}
                         onChange={(e) => setFilter('from', e.target.value)}
                         InputLabelProps={{ shrink: true }}
@@ -116,7 +111,7 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                     <TextField
                         size="small"
                         type="date"
-                        label="To"
+                        label={h.to}
                         value={filters.to}
                         onChange={(e) => setFilter('to', e.target.value)}
                         InputLabelProps={{ shrink: true }}
@@ -130,19 +125,19 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                         size="small"
                         value={filters.weekdays}
                         onChange={(_, value: number[]) => setFilter('weekdays', value)}
-                        aria-label="Days of the week"
+                        aria-label={h.daysOfWeek}
                         sx={{ flexWrap: 'wrap' }}
                     >
                         {WEEKDAYS.map((d) => (
-                            <ToggleButton key={d.value} value={d.value} sx={{ textTransform: 'none', px: 1.25 }}>
-                                {d.label}
+                            <ToggleButton key={d} value={d} sx={{ textTransform: 'none', px: 1.25 }}>
+                                {m.days.short[d]}
                             </ToggleButton>
                         ))}
                     </ToggleButtonGroup>
                     <Box sx={{ flexGrow: 1 }} />
                     {filtering && (
                         <Button size="small" onClick={() => onFiltersChange(NO_FILTERS)}>
-                            Clear filters
+                            {h.clearFilters}
                         </Button>
                     )}
                 </Box>
@@ -150,8 +145,8 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
 
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 1 }}>
                 {filtered.length === 0
-                    ? 'No workouts match these filters.'
-                    : `Showing ${pageStart + 1}–${pageStart + pageDays.length} of ${filtered.length} ${filtered.length === 1 ? 'day' : 'days'}`}
+                    ? h.noMatches
+                    : h.showing(pageStart + 1, pageStart + pageDays.length, filtered.length)}
             </Typography>
 
             <Stack spacing={2}>
@@ -164,9 +159,9 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 2 }}>
                                 <Typography variant="h6" sx={{ flexGrow: 1 }}>{formatDay(day.date)}</Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                    {day.sessions.length} {day.sessions.length === 1 ? 'exercise' : 'exercises'}
-                                    {' · '}{setCount} {setCount === 1 ? 'set' : 'sets'}
-                                    {volume > 0 && ` · ${formatNumber(volume, 0)} kg volume`}
+                                    {h.exercises(day.sessions.length)}
+                                    {' · '}{h.sets(setCount)}
+                                    {volume > 0 && ` · ${h.volume(formatNumber(volume, 0))}`}
                                 </Typography>
                             </Box>
 
@@ -192,7 +187,7 @@ export default function HistoryLog({ sessions, filters, onFiltersChange, page, o
                                             {session.sets.map((w) => (
                                                 <Typography key={w.id} variant="body2" sx={{ display: 'flex', gap: 1.5 }}>
                                                     <Box component="span" sx={{ width: 48, flexShrink: 0, color: 'text.secondary' }}>
-                                                        Set {w.set}
+                                                        {m.training.set(w.set ?? 0)}
                                                     </Box>
                                                     <Box component="span" sx={{ minWidth: 96 }}>{formatSet(w)}</Box>
                                                     {w.notes && (

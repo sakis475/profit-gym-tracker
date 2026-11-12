@@ -34,6 +34,7 @@ import {
 } from '../../lib/nutrition'
 import { dayKey, formatNumber, startOfWeek } from '../../lib/workoutStats'
 import type { BodyWeightRow, FoodLogRow, NutritionGoalsRow } from '../../types/entityTypes'
+import { locale, useT } from '../../i18n'
 
 type Props = {
     goals: NutritionGoalsRow | null
@@ -65,11 +66,11 @@ const tileGrid = {
 }
 
 function formatShortDate(date: Date) {
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+    return date.toLocaleDateString(locale(), { day: 'numeric', month: 'short' })
 }
 
 function formatDate(key: string) {
-    return parseDateKey(key).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    return parseDateKey(key).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function signed(n: number, digits = 1) {
@@ -77,6 +78,9 @@ function signed(n: number, digits = 1) {
 }
 
 export default function NutritionProgress({ goals, weights, onGoalsChange, onWeightsChange }: Props) {
+    const m = useT()
+    const p = m.nutrition.progress
+    const kg = m.units.kg
     const today = dayKey(new Date())
     const [range, setRange] = useState<Range>(30)
     const [metric, setMetric] = useState<NutrientKey>('kcal')
@@ -140,8 +144,8 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
     return (
         <>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Daily goals</Typography>
-                <Button startIcon={<EditIcon />} onClick={() => setGoalsOpen(true)}>Edit goals</Button>
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>{p.dailyGoals}</Typography>
+                <Button startIcon={<EditIcon />} onClick={() => setGoalsOpen(true)}>{p.editGoals}</Button>
             </Box>
             <Box sx={{ ...tileGrid, mt: 1 }}>
                 {NUTRIENTS.map(({ key, label }) => {
@@ -151,60 +155,60 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
                             key={key}
                             label={label}
                             value={goal !== null ? formatNutrientWithUnit(goal, key) : '–'}
-                            detail={goal !== null ? 'per day' : 'no goal'}
+                            detail={goal !== null ? p.perDay : p.noGoal}
                         />
                     )
                 })}
             </Box>
 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2, mt: 4 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Intake</Typography>
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>{p.intake}</Typography>
                 <ToggleButtonGroup size="small" exclusive value={range} onChange={(_, value: Range | null) => value && setRange(value)}>
                     {RANGES.map((r) => (
-                        <ToggleButton key={r} value={r} sx={{ textTransform: 'none' }}>{r} days</ToggleButton>
+                        <ToggleButton key={r} value={r} sx={{ textTransform: 'none' }}>{p.days(r)}</ToggleButton>
                     ))}
                 </ToggleButtonGroup>
             </Box>
 
             {log === undefined ? (
-                <Typography sx={{ mt: 1 }}>Loading...</Typography>
+                <Typography sx={{ mt: 1 }}>{m.common.loading}</Typography>
             ) : log === null ? (
-                <Typography color="error" sx={{ mt: 1 }}>Failed to load your food log.</Typography>
+                <Typography color="error" sx={{ mt: 1 }}>{p.failedToLoadLog}</Typography>
             ) : days.length === 0 ? (
                 <Typography color="text.secondary" sx={{ mt: 1 }}>
-                    Nothing logged in the last {range} days. Log what you eat in the Today tab.
+                    {p.nothingLogged(range)}
                 </Typography>
             ) : (
                 <>
                     <Box sx={{ ...tileGrid, mt: 1.5 }}>
-                        <StatTile label="Days logged" value={`${days.length} / ${range}`} />
+                        <StatTile label={p.daysLogged} value={`${days.length} / ${range}`} />
                         <StatTile
-                            label="Average calories"
-                            value={`${formatNutrient(average!.kcal, 'kcal')} kcal`}
-                            detail={kcalGoal ? `${signed(average!.kcal - kcalGoal, 0)} vs goal` : undefined}
+                            label={p.avgCalories}
+                            value={`${formatNutrient(average!.kcal, 'kcal')} ${m.units.kcal}`}
+                            detail={kcalGoal ? p.vsGoal(signed(average!.kcal - kcalGoal, 0)) : undefined}
                         />
                         <StatTile
-                            label="Average protein"
-                            value={`${formatNutrient(average!.protein, 'protein')} g`}
-                            detail={proteinGoal ? `${signed(average!.protein - proteinGoal, 0)} g vs goal` : undefined}
+                            label={p.avgProtein}
+                            value={`${formatNutrient(average!.protein, 'protein')} ${m.units.g}`}
+                            detail={proteinGoal ? p.vsGoal(`${signed(average!.protein - proteinGoal, 0)} ${m.units.g}`) : undefined}
                         />
                         {kcalOnTarget !== null && (
                             <StatTile
-                                label="Calories on target"
+                                label={p.caloriesOnTarget}
                                 value={`${kcalOnTarget} / ${days.length}`}
-                                detail={`days within ±${KCAL_TOLERANCE * 100}%`}
+                                detail={p.daysWithin(KCAL_TOLERANCE * 100)}
                             />
                         )}
                         {proteinReached !== null && (
-                            <StatTile label="Protein goal reached" value={`${proteinReached} / ${days.length}`} detail="days" />
+                            <StatTile label={p.proteinReached} value={`${proteinReached} / ${days.length}`} detail={p.daysWord} />
                         )}
-                        <StatTile label="Average fiber" value={`${formatNutrient(average!.fiber, 'fiber')} g`} />
+                        <StatTile label={p.avgFiber} value={`${formatNutrient(average!.fiber, 'fiber')} ${m.units.g}`} />
                     </Box>
 
                     <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mb: 1 }}>
                             <Typography variant="subtitle1" sx={{ fontWeight: 500, flexGrow: 1 }}>
-                                {metricInfo.label} per day
+                                {p.perDayChart(metricInfo.label)}
                             </Typography>
                             <ToggleButtonGroup size="small" exclusive value={metric} onChange={(_, value: NutrientKey | null) => value && setMetric(value)}>
                                 {NUTRIENTS.map((n) => (
@@ -214,15 +218,15 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
                         </Box>
                         {intakePoints.length < 2 ? (
                             <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-                                Log at least two days to see a trend.
+                                {p.needTwoDays}
                             </Typography>
                         ) : (
                             <TrendChart
                                 points={intakePoints}
                                 formatValue={(y) => formatNutrientWithUnit(y, metric)}
                                 formatTick={(p) => formatShortDate(new Date(p.x))}
-                                ariaLabel={`${metricInfo.label} per day`}
-                                reference={metricGoal != null ? { value: metricGoal, label: 'Goal' } : undefined}
+                                ariaLabel={p.perDayChart(metricInfo.label)}
+                                reference={metricGoal != null ? { value: metricGoal, label: p.goal } : undefined}
                             />
                         )}
                     </Paper>
@@ -230,35 +234,35 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
             )}
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 4 }}>
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>Body weight</Typography>
-                <Button startIcon={<AddIcon />} onClick={() => setWeighIn('new')}>Add weigh-in</Button>
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>{p.bodyWeight}</Typography>
+                <Button startIcon={<AddIcon />} onClick={() => setWeighIn('new')}>{p.addWeighIn}</Button>
             </Box>
             <Typography variant="body2" color="text.secondary">
-                Weighed once a week, on Monday. The Today tab asks for it on Mondays.
+                {p.weighedWeekly}
             </Typography>
 
             {weights.length === 0 ? (
-                <Typography color="text.secondary" sx={{ mt: 1 }}>No weigh-ins yet.</Typography>
+                <Typography color="text.secondary" sx={{ mt: 1 }}>{p.noWeighIns}</Typography>
             ) : (
                 <>
                     <Box sx={{ ...tileGrid, mt: 1.5 }}>
-                        <StatTile label="Current" value={`${formatNumber(latest.kg, 1)} kg`} detail={formatDate(latest.date)} />
+                        <StatTile label={p.current} value={`${formatNumber(latest.kg, 1)} ${kg}`} detail={formatDate(latest.date)} />
                         {weights.length > 1 && (
-                            <StatTile label="Since first weigh-in" value={`${signed(latest.kg - first.kg)} kg`} detail={formatDate(first.date)} />
+                            <StatTile label={p.sinceFirstWeighIn} value={`${signed(latest.kg - first.kg)} ${kg}`} detail={formatDate(first.date)} />
                         )}
                         {monthAgo && (
-                            <StatTile label="Last 4 weeks" value={`${signed(latest.kg - monthAgo.kg)} kg`} detail={`from ${formatNumber(monthAgo.kg, 1)} kg`} />
+                            <StatTile label={p.last4Weeks} value={`${signed(latest.kg - monthAgo.kg)} ${kg}`} detail={p.fromWeight(`${formatNumber(monthAgo.kg, 1)} ${kg}`)} />
                         )}
                     </Box>
 
                     {weightPoints.length >= 2 && (
                         <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>Weight per week</Typography>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>{p.weightPerWeek}</Typography>
                             <TrendChart
                                 points={weightPoints}
-                                formatValue={(y) => `${formatNumber(y, 1)} kg`}
+                                formatValue={(y) => `${formatNumber(y, 1)} ${kg}`}
                                 formatTick={(p) => formatShortDate(new Date(p.x))}
-                                ariaLabel="Body weight per week"
+                                ariaLabel={p.weightChartAria}
                             />
                         </Paper>
                     )}
@@ -267,10 +271,10 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
                         <Table size="small">
                             <TableHead>
                                 <TableRow>
-                                    <TableCell>Week of</TableCell>
-                                    <TableCell align="right">Weight</TableCell>
-                                    <TableCell align="right">Change</TableCell>
-                                    <TableCell>Notes</TableCell>
+                                    <TableCell>{p.weekOf}</TableCell>
+                                    <TableCell align="right">{m.common.weight}</TableCell>
+                                    <TableCell align="right">{p.change}</TableCell>
+                                    <TableCell>{m.common.notes}</TableCell>
                                     <TableCell />
                                 </TableRow>
                             </TableHead>
@@ -278,11 +282,11 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
                                 {weights.map((w, i) => ({ w, prev: weights[i - 1] })).reverse().map(({ w, prev }) => (
                                     <TableRow key={w.id}>
                                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(w.date)}</TableCell>
-                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{formatNumber(w.kg, 1)} kg</TableCell>
-                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{prev ? `${signed(w.kg - prev.kg)} kg` : '–'}</TableCell>
+                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{formatNumber(w.kg, 1)} {kg}</TableCell>
+                                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{prev ? `${signed(w.kg - prev.kg)} ${kg}` : '–'}</TableCell>
                                         <TableCell>{w.notes}</TableCell>
                                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                                            <IconButton size="small" aria-label="Edit weigh-in" onClick={() => setWeighIn(w)}>
+                                            <IconButton size="small" aria-label={p.editWeighIn} onClick={() => setWeighIn(w)}>
                                                 <EditIcon fontSize="small" />
                                             </IconButton>
                                         </TableCell>
@@ -307,6 +311,7 @@ export default function NutritionProgress({ goals, weights, onGoalsChange, onWei
 }
 
 function GoalsDialog({ goals, onClose, onSaved }: { goals: NutritionGoalsRow | null; onClose: () => void; onSaved: () => void }) {
+    const m = useT()
     const [values, setValues] = useState<Record<NutrientKey, string>>(() =>
         Object.fromEntries(NUTRIENTS.map(({ key }) => [key, String(goals?.[key] ?? '')])) as Record<NutrientKey, string>
     )
@@ -319,24 +324,24 @@ function GoalsDialog({ goals, onClose, onSaved }: { goals: NutritionGoalsRow | n
         for (const { key, label } of NUTRIENTS) {
             // Empty means no goal
             const value = values[key] === '' ? null : Number(values[key])
-            if (value !== null && !(value >= 0)) return setError(`${label} must be 0 or more`)
+            if (value !== null && !(value >= 0)) return setError(m.nutrition.foods.mustBeZeroOrMore(label))
             parsed[key] = value
         }
         setSaving(true)
         setError(null)
         const res = await saveGoals(parsed)
         setSaving(false)
-        if (!res) return setError('Failed to save goals')
+        if (!res) return setError(m.nutrition.progress.failedToSaveGoals)
         onSaved()
         onClose()
     }
 
     return (
         <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>Daily goals</DialogTitle>
+            <DialogTitle>{m.nutrition.progress.dailyGoals}</DialogTitle>
             <form onSubmit={handleSubmit}>
                 <DialogContent>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>Leave a value empty for no goal.</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>{m.nutrition.progress.leaveEmptyForNoGoal}</Typography>
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 1.5 }}>
                         {NUTRIENTS.map(({ key, label, unit }) => (
                             <TextField
@@ -353,8 +358,8 @@ function GoalsDialog({ goals, onClose, onSaved }: { goals: NutritionGoalsRow | n
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={onClose} disabled={saving}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+                    <Button onClick={onClose} disabled={saving}>{m.common.cancel}</Button>
+                    <Button type="submit" variant="contained" disabled={saving}>{saving ? m.common.saving : m.common.save}</Button>
                 </DialogActions>
             </form>
         </Dialog>
@@ -362,6 +367,7 @@ function GoalsDialog({ goals, onClose, onSaved }: { goals: NutritionGoalsRow | n
 }
 
 function WeighInDialog({ existing, onClose, onSaved }: { existing: BodyWeightRow | null; onClose: () => void; onSaved: () => void }) {
+    const m = useT()
     // A new weigh-in is for this week's Monday
     const [date, setDate] = useState(existing?.date ?? dayKey(startOfWeek(new Date())))
     const [kg, setKg] = useState(existing ? String(existing.kg) : '')
@@ -372,67 +378,67 @@ function WeighInDialog({ existing, onClose, onSaved }: { existing: BodyWeightRow
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         const value = Number(kg)
-        if (!date) return setError('Choose a date')
-        if (!(value > 0)) return setError('Enter your weight in kg')
+        if (!date) return setError(m.nutrition.progress.chooseDate)
+        if (!(value > 0)) return setError(m.nutrition.progress.enterWeight)
         setSaving(true)
         setError(null)
         // Moving a weigh-in to another date replaces whatever is on that date
         const ok = await saveBodyWeight(date, value, notes.trim() || null)
             && (!existing || existing.date === date || await deleteBodyWeight(existing.id))
         setSaving(false)
-        if (!ok) return setError('Failed to save')
+        if (!ok) return setError(m.common.failedToSave)
         onSaved()
         onClose()
     }
 
     async function handleDelete() {
-        if (!existing || !window.confirm('Delete this weigh-in?')) return
+        if (!existing || !window.confirm(m.nutrition.progress.deleteWeighInConfirm)) return
         setSaving(true)
         const ok = await deleteBodyWeight(existing.id)
         setSaving(false)
-        if (!ok) return setError('Failed to delete')
+        if (!ok) return setError(m.common.failedToDelete)
         onSaved()
         onClose()
     }
 
     return (
         <Dialog open onClose={onClose} fullWidth maxWidth="xs">
-            <DialogTitle>{existing ? 'Edit weigh-in' : 'Add weigh-in'}</DialogTitle>
+            <DialogTitle>{existing ? m.nutrition.progress.editWeighIn : m.nutrition.progress.addWeighIn}</DialogTitle>
             <form onSubmit={handleSubmit}>
                 <DialogContent>
                     <TextField
-                        label="Date"
+                        label={m.common.date}
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
                         fullWidth
                         required
                         InputLabelProps={{ shrink: true }}
-                        helperText={date && parseDateKey(date).getDay() !== 1 ? 'Not a Monday' : undefined}
+                        helperText={date && parseDateKey(date).getDay() !== 1 ? m.nutrition.progress.notMonday : undefined}
                         sx={{ mt: 1, mb: 2 }}
                     />
                     <TextField
-                        label="Weight"
+                        label={m.common.weight}
                         type="number"
                         value={kg}
                         onChange={(e) => setKg(e.target.value)}
                         fullWidth
                         required
                         inputProps={{ min: 0, step: 0.1, inputMode: 'decimal' }}
-                        InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+                        InputProps={{ endAdornment: <InputAdornment position="end">{m.units.kg}</InputAdornment> }}
                         sx={{ mb: 2 }}
                     />
-                    <TextField label="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth />
+                    <TextField label={m.common.notes} value={notes} onChange={(e) => setNotes(e.target.value)} fullWidth />
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
                     {existing && (
-                        <IconButton aria-label="Delete weigh-in" color="error" onClick={handleDelete} disabled={saving} sx={{ mr: 'auto' }}>
+                        <IconButton aria-label={m.nutrition.progress.deleteWeighIn} color="error" onClick={handleDelete} disabled={saving} sx={{ mr: 'auto' }}>
                             <DeleteIcon />
                         </IconButton>
                     )}
-                    <Button onClick={onClose} disabled={saving}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+                    <Button onClick={onClose} disabled={saving}>{m.common.cancel}</Button>
+                    <Button type="submit" variant="contained" disabled={saving}>{saving ? m.common.saving : m.common.save}</Button>
                 </DialogActions>
             </form>
         </Dialog>

@@ -1,25 +1,42 @@
 import type { Nutrients } from './nutrition'
+import { t, type Messages } from '../i18n'
 
 // Daily targets from the profile, with the usual formulas. They are estimates to start
 // from: the weekly weigh-ins tell whether they need adjusting.
 
 export type Sex = 'male' | 'female'
 
+// The labels and descriptions are getters, so they are read in the current language
+const activity = (value: keyof Messages['profile']['activity'], factor: number) => ({
+    value,
+    get label() { return t().profile.activity[value].label },
+    get description() { return t().profile.activity[value].description },
+    factor,
+})
+
 export const ACTIVITY_LEVELS = [
-    { value: 'sedentary', label: 'Sedentary', description: 'Desk job, little or no exercise', factor: 1.2 },
-    { value: 'light', label: 'Lightly active', description: 'Exercise 1–3 days a week', factor: 1.375 },
-    { value: 'moderate', label: 'Moderately active', description: 'Exercise 3–5 days a week', factor: 1.55 },
-    { value: 'active', label: 'Very active', description: 'Hard exercise 6–7 days a week', factor: 1.725 },
-    { value: 'very_active', label: 'Extremely active', description: 'Physical job and hard training', factor: 1.9 },
+    activity('sedentary', 1.2),
+    activity('light', 1.375),
+    activity('moderate', 1.55),
+    activity('active', 1.725),
+    activity('very_active', 1.9),
 ] as const
 
 // `adjust` is the share of the maintenance calories added or taken away. Protein is higher
 // while losing weight, to keep muscle in a calorie deficit.
+const goal = (value: keyof Messages['profile']['goals'], adjust: number, proteinPerKg: number) => ({
+    value,
+    get label() { return t().profile.goals[value].label },
+    get description() { return t().profile.goals[value].description },
+    adjust,
+    proteinPerKg,
+})
+
 export const GOALS = [
-    { value: 'lose', label: 'Lose weight', description: 'About 0.5–0.75 kg a week', adjust: -0.2, proteinPerKg: 2.0 },
-    { value: 'lose_slow', label: 'Lose slowly', description: 'About 0.25–0.5 kg a week', adjust: -0.1, proteinPerKg: 2.0 },
-    { value: 'maintain', label: 'Maintain', description: 'Keep your weight', adjust: 0, proteinPerKg: 1.8 },
-    { value: 'gain_slow', label: 'Build muscle', description: 'Lean gain, about 0.25 kg a week', adjust: 0.1, proteinPerKg: 1.8 },
+    goal('lose', -0.2, 2.0),
+    goal('lose_slow', -0.1, 2.0),
+    goal('maintain', 0, 1.8),
+    goal('gain_slow', 0.1, 1.8),
 ] as const
 
 export type ActivityLevel = (typeof ACTIVITY_LEVELS)[number]['value']

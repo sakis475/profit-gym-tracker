@@ -79,6 +79,7 @@ import {
 import { dropCollision } from './dropCollision'
 import { useOpenContents } from './useOpenContents'
 import { DragPreview } from '../DragSidebar'
+import { locale, t, useT } from '../../i18n'
 
 type Props = {
     plan: MealPlanWithFood[]
@@ -115,11 +116,11 @@ function logNutrients(l: FoodLogWithFood): Nutrients {
 }
 
 function formatDay(key: string) {
-    return parseDateKey(key).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+    return parseDateKey(key).toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })
 }
 
 function intoName(into: Into) {
-    return into.kind === 'plan' ? into.item.foods.name : into.row.foods?.name ?? 'Deleted food'
+    return into.kind === 'plan' ? into.item.foods.name : into.row.foods?.name ?? t().nutrition.deletedFood
 }
 
 function intoMeal(into: Into) {
@@ -127,6 +128,7 @@ function intoMeal(into: Into) {
 }
 
 export default function FoodDiary({ plan, meals, foods, contents, goals, weights, onWeightsChange }: Props) {
+    const m = useT()
     const today = dayKey(new Date())
     const [date, setDate] = useState(today)
     const [log, setLog] = useState<{ date: string; rows: FoodLogWithFood[] | null } | null>(null)
@@ -224,13 +226,13 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
     }
 
     function logPlanned(items: MealPlanWithFood[], amount?: { id: string; quantity: number }) {
-        return run(() => logPlannedItems(items, amount), 'Failed to log')
+        return run(() => logPlannedItems(items, amount), m.common.failedToLog)
     }
 
     // Ticking a planned food logs what is planned in it too; unticking takes it all out of the log
     function togglePlanned(item: MealPlanWithFood) {
         const logged = logByPlan.get(item.id)
-        if (logged) run(() => deleteFoodLog(logged.id), 'Failed to remove')
+        if (logged) run(() => deleteFoodLog(logged.id), m.common.failedToRemove)
         else logPlanned([item, ...plannedContents(item.id)])
     }
 
@@ -239,7 +241,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
     function changeLogged(l: FoodLogWithFood, quantity: number) {
         return run(
             () => updateFoodLog(l.id, { quantity, ...scaleNutrients(logNutrients(l), quantity / l.quantity) }),
-            'Failed to save'
+            m.common.failedToSave
         )
     }
 
@@ -270,7 +272,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 quantity: c.quantity,
                 ...foodNutrients(c.food, c.quantity),
             })))
-            if (!ok) setError(`Logged ${food.name}, but not the foods that go in it`)
+            if (!ok) setError(m.nutrition.diary.loggedNotContents(food.name))
         }
         return ids[0]
     }
@@ -293,8 +295,8 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 ...foodNutrients(food, quantity),
                 ...(moved && { parentId: null }),
             }) && (!moved || await updateFoodLogContents(entry.log.id, { mealId }))
-        }, 'Failed to save')
-        if (!ok) return 'Failed to save'
+        }, m.common.failedToSave)
+        if (!ok) return m.common.failedToSave
         setEntry(null)
         return null
     }
@@ -318,7 +320,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
         const into = target.intoKey ? intoFor(target.intoKey) : null
         // One level only
         if (into && contents.has(data.food.id)) {
-            return setError(`${data.food.name} has foods in it, so it can't go in another food`)
+            return setError(m.nutrition.cantGoIn(data.food.name))
         }
         // What is put in shows
         if (into) openContents.show(intoKeyOf(into))
@@ -326,7 +328,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
         setError(null)
         const id = await addFood(data.food, defaultQuantity(data.food.unit), into ? intoMeal(into) : target.mealId, into)
         setBusy(false)
-        if (!id) setError(`Failed to log ${data.food.name}`)
+        if (!id) setError(m.nutrition.diary.failedToLogFood(data.food.name))
         else setFocusId(id)
         setReload((n) => n + 1)
     }
@@ -348,7 +350,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 nutrients={logNutrients(l)}
                 {...extra}
                 logged
-                note={l.quantity !== p.quantity ? `planned ${formatQuantity(p.quantity, p.foods.unit)}` : undefined}
+                note={l.quantity !== p.quantity ? m.nutrition.diary.planned(formatQuantity(p.quantity, p.foods.unit)) : undefined}
                 busy={busy}
                 onToggle={() => togglePlanned(p)}
                 onCommit={(q) => changeLogged(l, q)}
@@ -375,17 +377,17 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
         return (
             <DiaryRow
                 key={`${l.id}:${l.quantity}`}
-                name={l.foods?.name ?? 'Deleted food'}
+                name={l.foods?.name ?? m.nutrition.deletedFood}
                 unit={l.foods?.unit ?? ''}
                 quantity={l.quantity}
                 nutrients={logNutrients(l)}
                 {...extra}
                 logged
-                note="not planned"
+                note={m.nutrition.diary.notPlanned}
                 busy={busy}
                 autoFocus={l.id === focusId}
                 onBlurred={() => setFocusId(null)}
-                onToggle={() => run(() => deleteFoodLog(l.id), 'Failed to remove')}
+                onToggle={() => run(() => deleteFoodLog(l.id), m.common.failedToRemove)}
                 onCommit={(q) => changeLogged(l, q)}
                 onEdit={() => setEntry({ kind: 'edit', log: l, planned: false })}
             />
@@ -408,7 +410,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 {renderPlanned(p, {
                     madeOf: hasContents ? {
                         nutrients: contentsTotal,
-                        names: [...inPlan.map((c) => c.foods.name), ...added.map((c) => c.foods?.name ?? 'Deleted food')],
+                        names: [...inPlan.map((c) => c.foods.name), ...added.map((c) => c.foods?.name ?? m.nutrition.deletedFood)],
                         open: openContents.isOpen(key),
                         onToggle: () => openContents.toggle(key),
                     } : undefined,
@@ -433,7 +435,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 {renderExtra(l, {
                     madeOf: inside.length > 0 ? {
                         nutrients: sumNutrients(inside.map(logNutrients)),
-                        names: inside.map((c) => c.foods?.name ?? 'Deleted food'),
+                        names: inside.map((c) => c.foods?.name ?? m.nutrition.deletedFood),
                         open: openContents.isOpen(key),
                         onToggle: () => openContents.toggle(key),
                     } : undefined,
@@ -464,7 +466,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
         >
             <WithFoodSidebar foods={foods} contents={contents}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <IconButton aria-label="Previous day" onClick={() => setDate(dayKey(addDays(date, -1)))}>
+                    <IconButton aria-label={m.nutrition.diary.previousDay} onClick={() => setDate(dayKey(addDays(date, -1)))}>
                         <PrevIcon />
                     </IconButton>
                     <TextField
@@ -472,12 +474,12 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                         type="date"
                         value={date}
                         onChange={(e) => e.target.value && setDate(e.target.value)}
-                        inputProps={{ 'aria-label': 'Date' }}
+                        inputProps={{ 'aria-label': m.common.date }}
                     />
-                    <IconButton aria-label="Next day" onClick={() => setDate(dayKey(addDays(date, 1)))}>
+                    <IconButton aria-label={m.nutrition.diary.nextDay} onClick={() => setDate(dayKey(addDays(date, 1)))}>
                         <NextIcon />
                     </IconButton>
-                    {date !== today && <Button onClick={() => setDate(today)}>Today</Button>}
+                    {date !== today && <Button onClick={() => setDate(today)}>{m.common.today}</Button>}
                     <Typography variant="h6" sx={{ flexGrow: 1, textAlign: 'right' }}>{formatDay(date)}</Typography>
                 </Box>
 
@@ -486,9 +488,9 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                 )}
 
                 {loading ? (
-                    <Typography sx={{ mt: 2 }}>Loading...</Typography>
+                    <Typography sx={{ mt: 2 }}>{m.common.loading}</Typography>
                 ) : log.rows === null ? (
-                    <Typography color="error" sx={{ mt: 2 }}>Failed to load this day.</Typography>
+                    <Typography color="error" sx={{ mt: 2 }}>{m.nutrition.diary.failedToLoadDay}</Typography>
                 ) : (
                     <>
                         <Box sx={{ mt: 2 }}>
@@ -497,7 +499,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                                 goals={goals}
                                 sources={countedRows.map((l) => ({
                                     key: l.foodId ?? l.id,
-                                    name: l.foods?.name ?? 'Deleted food',
+                                    name: l.foods?.name ?? m.nutrition.deletedFood,
                                     nutrients: logNutrients(l),
                                 }))}
                             />
@@ -505,16 +507,16 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, mt: 1.5 }}>
                             <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
                                 {dayPlan.length > 0
-                                    ? `Planned for this day: ${formatNutrient(planTotals.kcal, 'kcal')} kcal · ${formatNutrient(planTotals.protein, 'protein')} g protein`
-                                    : 'Nothing planned for this day.'}
+                                    ? m.nutrition.diary.plannedForDay(formatNutrient(planTotals.kcal, 'kcal'), formatNutrient(planTotals.protein, 'protein'))
+                                    : m.nutrition.diary.nothingPlannedForDay}
                             </Typography>
                             {unlogged.length > 0 && (
                                 <Button startIcon={<DoneAllIcon />} onClick={() => logPlanned(unlogged)} disabled={busy}>
-                                    Tick all remaining
+                                    {m.nutrition.diary.tickAllRemaining}
                                 </Button>
                             )}
                             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEntry({ kind: 'add' })}>
-                                Add food
+                                {m.nutrition.addFood}
                             </Button>
                         </Box>
                         {error && <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>}
@@ -542,7 +544,7 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                                             <Typography variant="subtitle1" sx={{ fontWeight: 500, flexGrow: 1 }}>{meal.name}</Typography>
                                             {(planned.length > 0 || mealExtras.length > 0) && (
                                                 <Typography variant="body2" color="text.secondary">
-                                                    {formatNutrient(eaten.kcal, 'kcal')} kcal · P {formatNutrient(eaten.protein, 'protein')} g
+                                                    {formatNutrient(eaten.kcal, 'kcal')} {m.units.kcal} · {m.nutrients.protein.short} {formatNutrient(eaten.protein, 'protein')} {m.units.g}
                                                 </Typography>
                                             )}
                                         </Box>
@@ -550,20 +552,20 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
                                         {mealExtras.map((l) => renderExtraGroup(l, meal.id))}
                                         {planned.length === 0 && mealExtras.length === 0 && (
                                             <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
-                                                Nothing planned.
+                                                {m.nutrition.diary.nothingPlanned}
                                                 {/* Only where the food list is shown */}
-                                                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}> Drag foods here.</Box>
+                                                <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>{m.nutrition.diary.dragFoodsHere}</Box>
                                             </Typography>
                                         )}
                                         <Button size="small" startIcon={<AddIcon />} onClick={() => setEntry({ kind: 'add', mealId: meal.id })} sx={{ mt: 0.5 }}>
-                                            Add to {meal.name}
+                                            {m.nutrition.addTo(meal.name)}
                                         </Button>
                                     </MealDropZone>
                                 )
                             })}
                             {orphanExtras.length > 0 && (
                                 <Paper variant="outlined" sx={{ p: 2 }}>
-                                    <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>Other</Typography>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>{m.nutrition.diary.other}</Typography>
                                     {orphanExtras.map((l) => renderExtraGroup(l, null))}
                                 </Paper>
                             )}
@@ -578,8 +580,8 @@ export default function FoodDiary({ plan, meals, foods, contents, goals, weights
 
             {entry && (
                 <FoodEntryDialog
-                    title={entry.kind === 'edit' ? 'Edit logged food' : entry.into ? `Add to ${intoName(entry.into)}` : 'Add food'}
-                    submitLabel={entry.kind === 'edit' ? 'Save' : 'Log'}
+                    title={entry.kind === 'edit' ? m.nutrition.diary.editLogged : entry.into ? m.nutrition.addTo(intoName(entry.into)) : m.nutrition.addFood}
+                    submitLabel={entry.kind === 'edit' ? m.common.save : m.nutrition.diary.log}
                     meals={meals}
                     // A food with foods in it goes in no other
                     foods={entry.kind === 'add' && entry.into ? foods.filter((f) => !contents.has(f.id)) : foods}
@@ -636,6 +638,7 @@ function DiaryRow({
     onAddInto?: () => void
     onEdit?: () => void
 }) {
+    const m = useT()
     const [draft, setDraft] = useState(String(quantity))
     const amount = Number(draft)
     // Made of foods, it comes to what is in it; its own amount and values don't apply
@@ -655,7 +658,7 @@ function DiaryRow({
                 checked={logged}
                 disabled={busy}
                 onChange={onToggle}
-                inputProps={{ 'aria-label': `${logged ? 'Unlog' : 'Log'} ${name}` }}
+                inputProps={{ 'aria-label': logged ? m.nutrition.diary.unlogItem(name) : m.nutrition.diary.logItem(name) }}
                 sx={dense ? { p: 0.75 } : undefined}
             />
             <Box sx={{ flex: 1, minWidth: 0, opacity: logged ? 1 : 0.7 }}>
@@ -674,7 +677,7 @@ function DiaryRow({
                 <QuantityInput
                     value={draft}
                     unit={unit}
-                    label={`Amount of ${name}`}
+                    label={m.nutrition.amountOf(name)}
                     autoFocus={autoFocus}
                     disabled={busy}
                     faded={!logged}
@@ -685,8 +688,8 @@ function DiaryRow({
                 />
             )}
             {onAddInto ? (
-                <Tooltip title={`Put a food in ${name}`}>
-                    <IconButton size="small" aria-label={`Put a food in ${name}`} onClick={onAddInto}>
+                <Tooltip title={m.nutrition.putIn(name)}>
+                    <IconButton size="small" aria-label={m.nutrition.putIn(name)} onClick={onAddInto}>
                         <AddIntoIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
@@ -695,8 +698,8 @@ function DiaryRow({
                 <Box sx={{ width: 34, flexShrink: 0 }} />
             )}
             {onEdit ? (
-                <Tooltip title="Change meal or food">
-                    <IconButton size="small" aria-label={`Edit ${name}`} onClick={onEdit}>
+                <Tooltip title={m.nutrition.diary.changeMealOrFood}>
+                    <IconButton size="small" aria-label={m.nutrition.edit(name)} onClick={onEdit}>
                         <EditIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
@@ -710,6 +713,7 @@ function DiaryRow({
 
 // The weekly weigh-in, shown on Mondays only
 function WeighIn({ date, existing, onSaved }: { date: string; existing: BodyWeightRow | null; onSaved: () => void }) {
+    const m = useT()
     const [editing, setEditing] = useState(!existing)
     const [kg, setKg] = useState(existing ? String(existing.kg) : '')
     const [saving, setSaving] = useState(false)
@@ -718,12 +722,12 @@ function WeighIn({ date, existing, onSaved }: { date: string; existing: BodyWeig
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
         const value = Number(kg)
-        if (!(value > 0)) return setError('Enter your weight in kg')
+        if (!(value > 0)) return setError(m.nutrition.diary.enterWeight)
         setSaving(true)
         setError(null)
         const ok = await saveBodyWeight(date, value, existing?.notes ?? null)
         setSaving(false)
-        if (!ok) return setError('Failed to save')
+        if (!ok) return setError(m.common.failedToSave)
         setEditing(false)
         onSaved()
     }
@@ -734,26 +738,26 @@ function WeighIn({ date, existing, onSaved }: { date: string; existing: BodyWeig
             {existing && !editing ? (
                 <>
                     <Typography sx={{ flexGrow: 1 }}>
-                        Weekly weigh-in: <strong>{formatNumber(existing.kg, 1)} kg</strong>
+                        {m.nutrition.diary.weeklyWeighIn} <strong>{formatNumber(existing.kg, 1)} {m.units.kg}</strong>
                     </Typography>
-                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditing(true)}>Edit</Button>
+                    <Button size="small" startIcon={<EditIcon />} onClick={() => setEditing(true)}>{m.common.edit}</Button>
                 </>
             ) : (
                 <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', flexGrow: 1 }}>
-                    <Typography sx={{ flexGrow: 1 }}>It's Monday: time for your weekly weigh-in.</Typography>
+                    <Typography sx={{ flexGrow: 1 }}>{m.nutrition.diary.mondayWeighIn}</Typography>
                     <TextField
                         size="small"
                         type="number"
-                        label="Weight"
+                        label={m.common.weight}
                         value={kg}
                         onChange={(e) => setKg(e.target.value)}
                         inputProps={{ min: 0, step: 0.1, inputMode: 'decimal' }}
-                        InputProps={{ endAdornment: <InputAdornment position="end">kg</InputAdornment> }}
+                        InputProps={{ endAdornment: <InputAdornment position="end">{m.units.kg}</InputAdornment> }}
                         sx={{ width: 140 }}
                     />
-                    <Button type="submit" variant="contained" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+                    <Button type="submit" variant="contained" disabled={saving}>{saving ? m.common.saving : m.common.save}</Button>
                     {existing && (
-                        <IconButton size="small" aria-label="Cancel" onClick={() => setEditing(false)} disabled={saving}>
+                        <IconButton size="small" aria-label={m.common.cancel} onClick={() => setEditing(false)} disabled={saving}>
                             <CloseIcon fontSize="small" />
                         </IconButton>
                     )}

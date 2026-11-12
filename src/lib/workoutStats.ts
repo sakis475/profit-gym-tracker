@@ -1,4 +1,5 @@
 import type { WorkoutRow, WorkoutWithExercise } from '../types/entityTypes'
+import { locale, t } from '../i18n'
 
 // One exercise done once: the sets logged together, sharing exerciseId and createdAt
 export type Session = {
@@ -51,8 +52,9 @@ export function estimate1RM(kg: number | null, reps: number | null) {
     return reps === 1 ? kg : kg * (1 + reps / 30)
 }
 
-// Rows come newest workout first, sets in order, so sessions come out newest first too
-export function groupSessions(rows: WorkoutWithExercise[]): Session[] {
+// Rows come newest workout first, sets in order, so sessions come out newest first too.
+// `unknownName` is what an exercise without a name is called.
+export function groupSessions(rows: WorkoutWithExercise[], unknownName: string): Session[] {
     const sessions = new Map<string, Session>()
     for (const row of rows) {
         const key = `${row.exerciseId}|${row.createdAt}`
@@ -61,7 +63,7 @@ export function groupSessions(rows: WorkoutWithExercise[]): Session[] {
             session = {
                 key,
                 exerciseId: row.exerciseId,
-                name: row.exercises?.name ?? 'Unknown exercise',
+                name: row.exercises?.name ?? unknownName,
                 category: row.exercises?.category ?? null,
                 createdAt: row.createdAt,
                 sets: [],
@@ -164,13 +166,15 @@ export function filterDays(days: WorkoutDay[], { query, weekdays, from, to }: Lo
     })
 }
 
+// In the current language's way, e.g. "1,234.5" or "1.234,5"
 export function formatNumber(n: number, maximumFractionDigits = 1) {
-    return n.toLocaleString(undefined, { maximumFractionDigits })
+    return n.toLocaleString(locale(), { maximumFractionDigits })
 }
 
 export function formatSet(w: Pick<WorkoutRow, 'reps' | 'kg'>) {
-    if (w.reps !== null && w.kg !== null) return `${w.reps} × ${formatNumber(w.kg, 2)} kg`
-    if (w.reps !== null) return `${w.reps} reps`
-    if (w.kg !== null) return `${formatNumber(w.kg, 2)} kg`
+    const kg = t().units.kg
+    if (w.reps !== null && w.kg !== null) return `${w.reps} × ${formatNumber(w.kg, 2)} ${kg}`
+    if (w.reps !== null) return t().training.reps(w.reps)
+    if (w.kg !== null) return `${formatNumber(w.kg, 2)} ${kg}`
     return '–'
 }

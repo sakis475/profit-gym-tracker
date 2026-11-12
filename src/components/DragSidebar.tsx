@@ -3,6 +3,7 @@ import { Box, InputAdornment, Paper, TextField, Typography } from '@mui/material
 import { DragIndicator as DragIndicatorIcon, Search as SearchIcon } from '@mui/icons-material'
 import { useDraggable } from '@dnd-kit/core'
 import { normalizeSearch } from '../lib/workoutStats'
+import { useT } from '../i18n'
 
 // A searchable list beside the page to drag things from (foods onto meals, exercises onto days).
 // The page supplies the DndContext and decides what a drop does from the item's `data`.
@@ -47,6 +48,7 @@ export function WithDragSidebar({ title, items, emptyText, children }: Props) {
 }
 
 function DragSidebar({ title, items, emptyText }: Omit<Props, 'children'>) {
+    const m = useT()
     const [search, setSearch] = useState('')
     const shown = useMemo(() => {
         const q = normalizeSearch(search.trim())
@@ -69,7 +71,7 @@ function DragSidebar({ title, items, emptyText }: Omit<Props, 'children'>) {
                 <TextField
                     size="small"
                     fullWidth
-                    placeholder="Search"
+                    placeholder={m.common.search}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     InputProps={{
@@ -85,7 +87,7 @@ function DragSidebar({ title, items, emptyText }: Omit<Props, 'children'>) {
                 {shown.map((item) => <DraggableItem key={item.dragId} item={item} />)}
                 {shown.length === 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ p: 1 }}>
-                        {items.length === 0 ? emptyText : 'Nothing matches.'}
+                        {items.length === 0 ? emptyText : m.common.nothingMatches}
                     </Typography>
                 )}
             </Box>
@@ -94,6 +96,7 @@ function DragSidebar({ title, items, emptyText }: Omit<Props, 'children'>) {
 }
 
 function DraggableItem({ item }: { item: SidebarItem }) {
+    const m = useT()
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.dragId, data: item.data })
 
     return (
@@ -101,7 +104,7 @@ function DraggableItem({ item }: { item: SidebarItem }) {
             ref={setNodeRef}
             {...attributes}
             {...listeners}
-            aria-label={`Drag ${item.name}`}
+            aria-label={m.common.drag(item.name)}
             sx={{
                 display: 'flex',
                 alignItems: 'center',

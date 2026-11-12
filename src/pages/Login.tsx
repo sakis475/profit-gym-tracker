@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper } from '@mui/material'
+import { useT } from '../i18n'
 
 type Props = {
     onSuccess?: (user: any | null) => void
 }
 
 export default function Login({ onSuccess }: Props) {
+    const m = useT()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -29,10 +31,10 @@ export default function Login({ onSuccess }: Props) {
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
             <Paper sx={{ p: 3, width: 420 }}>
                 <form onSubmit={handleSignIn}>
-                    <Typography variant="h6" gutterBottom>Sign in</Typography>
+                    <Typography variant="h6" gutterBottom>{m.login.title}</Typography>
                     {error && <Alert severity="info" sx={{ mb: 2 }}>{error}</Alert>}
                     <TextField
-                        label="Email"
+                        label={m.login.email}
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -41,7 +43,7 @@ export default function Login({ onSuccess }: Props) {
                         sx={{ mb: 2 }}
                     />
                     <TextField
-                        label="Password"
+                        label={m.login.password}
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -50,7 +52,7 @@ export default function Login({ onSuccess }: Props) {
                         sx={{ mb: 2 }}
                     />
                     <Button type="submit" variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={16} /> : null}>
-                        Sign in
+                        {m.login.submit}
                     </Button>
                 </form>
             </Paper>

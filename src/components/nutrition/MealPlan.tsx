@@ -72,11 +72,10 @@ import {
 import { dropCollision } from './dropCollision'
 import { useOpenContents } from './useOpenContents'
 import { DragPreview } from '../DragSidebar'
+import { useT } from '../../i18n'
 
-// Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay()
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const DAY_SHORT_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-// Displayed Monday first
+// Stored day is the day of the week, 0 (Sunday) to 6 (Saturday), same as Date.getDay(), which
+// is how the translations list the day names. Displayed Monday first.
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
 
 type Props = {
@@ -100,6 +99,8 @@ function itemsNutrients(items: MealPlanWithFood[]) {
 }
 
 export default function MealPlan({ plan, meals, foods, contents, goals, onChange }: Props) {
+    const m = useT()
+    const DAY_NAMES = m.days.long
     const [day, setDay] = useState(() => new Date().getDay())
     const [entry, setEntry] = useState<EntryDialog | null>(null)
     const [removing, setRemoving] = useState<MealPlanWithFood | null>(null)
@@ -145,7 +146,7 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                 quantity: c.quantity,
                 order: i,
             })))
-            if (!ids) setError(`Added ${food.name}, but not the foods that go in it`)
+            if (!ids) setError(m.nutrition.plan.addedNotContents(food.name))
         }
         return id
     }
@@ -157,10 +158,10 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
             // Moved to another meal, it comes out of the food it was in, and what is in it goes along
             const ok = await updatePlanItem(item.id, { mealId, foodId, quantity, ...(moved && { parentId: null }) })
                 && (!moved || await updatePlanContents(item.id, { mealId }))
-            if (!ok) return 'Failed to save'
+            if (!ok) return m.common.failedToSave
         } else {
             const into = entry?.into ?? null
-            if (!(await addFood(food, quantity, into?.mealId ?? mealId, into))) return 'Failed to save'
+            if (!(await addFood(food, quantity, into?.mealId ?? mealId, into))) return m.common.failedToSave
             if (into) openContents.show(into.id)
         }
         setEntry(null)
@@ -173,7 +174,7 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
         setBusy(true)
         const ok = await deletePlanItem(removing.id)
         setBusy(false)
-        if (!ok) return setError('Failed to remove')
+        if (!ok) return setError(m.common.failedToRemove)
         setRemoving(null)
         onChange()
     }
@@ -190,10 +191,10 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
         if (data.kind === 'food') {
             // One level only
             if (into && contents.has(data.food.id)) {
-                return setError(`${data.food.name} has foods in it, so it can't go in another food`)
+                return setError(m.nutrition.cantGoIn(data.food.name))
             }
             const id = await addFood(data.food, defaultQuantity(data.food.unit), mealId, into)
-            if (!id) return setError(`Failed to add ${data.food.name}`)
+            if (!id) return setError(m.nutrition.plan.failedToAdd(data.food.name))
             setFocusId(id)
         } else {
             const { item } = data
@@ -202,7 +203,7 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                 if (into.id === item.id || into.id === item.parentId) return
                 // One level only
                 if (contentsOf(item.id).length > 0) {
-                    return setError(`${item.foods.name} has foods in it, so it can't go in another food`)
+                    return setError(m.nutrition.cantGoIn(item.foods.name))
                 }
                 ok = await updatePlanItem(item.id, { mealId, parentId: into.id, order: contentsOf(into.id).length })
             } else {
@@ -211,7 +212,7 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                 ok = await updatePlanItem(item.id, { mealId, parentId: null, order })
                     && await updatePlanContents(item.id, { mealId })
             }
-            if (!ok) return setError(`Failed to move ${item.foods.name}`)
+            if (!ok) return setError(m.nutrition.plan.failedToMove(item.foods.name))
         }
         // What was put in shows
         if (into) openContents.show(into.id)
@@ -254,8 +255,8 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
         >
             <WithFoodSidebar foods={foods} contents={contents}>
                 <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                    <Button startIcon={<MealsIcon />} onClick={() => setMealsOpen(true)}>Meals</Button>
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEntry({})}>Add food</Button>
+                    <Button startIcon={<MealsIcon />} onClick={() => setMealsOpen(true)}>{m.nutrition.plan.meals}</Button>
+                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEntry({})}>{m.nutrition.addFood}</Button>
                 </Box>
 
                 <ToggleButtonGroup
@@ -266,12 +267,12 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                     onChange={(_, value: number | null) => {
                         if (value !== null) setDay(value)
                     }}
-                    aria-label="Day of the week"
+                    aria-label={m.days.dayOfWeek}
                     sx={{ mt: 2 }}
                 >
                     {DAY_ORDER.map((d) => (
                         <ToggleButton key={d} value={d} aria-label={DAY_NAMES[d]}>
-                            {DAY_SHORT_NAMES[d]}
+                            {m.days.short[d]}
                         </ToggleButton>
                     ))}
                 </ToggleButtonGroup>
@@ -298,7 +299,7 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                                     <Typography variant="subtitle1" sx={{ fontWeight: 500, flexGrow: 1 }}>{meal.name}</Typography>
                                     {items.length > 0 && (
                                         <Typography variant="body2" color="text.secondary">
-                                            {formatNutrient(totals.kcal, 'kcal')} kcal · P {formatNutrient(totals.protein, 'protein')} g
+                                            {formatNutrient(totals.kcal, 'kcal')} {m.units.kcal} · {m.nutrients.protein.short} {formatNutrient(totals.protein, 'protein')} {m.units.g}
                                         </Typography>
                                     )}
                                 </Box>
@@ -318,17 +319,17 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
                                 {items.length === 0 && (
                                     // Only where the food list is shown
                                     <Typography variant="body2" color="text.secondary" sx={{ py: 1, display: { xs: 'none', md: 'block' } }}>
-                                        Drag foods here
+                                        {m.nutrition.plan.dragFoodsHere}
                                     </Typography>
                                 )}
                                 <Button size="small" startIcon={<AddIcon />} onClick={() => setEntry({ mealId: meal.id })} sx={{ mt: 0.5 }}>
-                                    Add to {meal.name}
+                                    {m.nutrition.addTo(meal.name)}
                                 </Button>
                             </MealDropZone>
                         )
                     })}
                     {meals.length === 0 && (
-                        <Typography>No meals yet. Add your meals (breakfast, lunch, …) with the Meals button.</Typography>
+                        <Typography>{m.nutrition.plan.noMeals}</Typography>
                     )}
                 </Stack>
             </WithFoodSidebar>
@@ -339,8 +340,8 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
 
             {entry && (
                 <FoodEntryDialog
-                    title={entry.item ? 'Edit planned food' : entry.into ? `Add to ${entry.into.foods.name}` : `Add to ${DAY_NAMES[day]}`}
-                    submitLabel={entry.item ? 'Save' : 'Add'}
+                    title={entry.item ? m.nutrition.plan.editPlanned : m.nutrition.addTo(entry.into ? entry.into.foods.name : DAY_NAMES[day])}
+                    submitLabel={entry.item ? m.common.save : m.common.add}
                     meals={meals}
                     // A food with foods in it goes in no other
                     foods={entry.into ? foods.filter((f) => !contents.has(f.id)) : foods}
@@ -355,19 +356,17 @@ export default function MealPlan({ plan, meals, foods, contents, goals, onChange
             )}
 
             <Dialog open={!!removing} onClose={() => setRemoving(null)}>
-                <DialogTitle>Remove from plan</DialogTitle>
+                <DialogTitle>{m.nutrition.plan.removeTitle}</DialogTitle>
                 <DialogContent>
                     <Typography>
-                        Remove "{removing?.foods.name}"
-                        {removingContents > 0 && ` and the ${removingContents === 1 ? 'food' : `${removingContents} foods`} in it`}
-                        {' '}from {DAY_NAMES[day]}?
+                        {removing && m.nutrition.plan.removeConfirm(removing.foods.name, removingContents, DAY_NAMES[day])}
                     </Typography>
                     {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={() => setRemoving(null)} disabled={busy}>Cancel</Button>
+                    <Button onClick={() => setRemoving(null)} disabled={busy}>{m.common.cancel}</Button>
                     <Button color="error" variant="contained" onClick={handleRemove} disabled={busy}>
-                        {busy ? 'Removing…' : 'Remove'}
+                        {busy ? m.common.removing : m.common.remove}
                     </Button>
                 </DialogActions>
             </Dialog>
@@ -402,6 +401,7 @@ function PlanItemRow({
     onEdit: () => void
     onRemove: () => void
 }) {
+    const m = useT()
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `plan:${item.id}`,
         data: { kind: 'plan', item } satisfies DragData,
@@ -433,7 +433,7 @@ function PlanItemRow({
             <Box
                 {...attributes}
                 {...listeners}
-                aria-label={`Drag ${item.foods.name} to another meal or food`}
+                aria-label={m.nutrition.plan.dragAria(item.foods.name)}
                 sx={{ display: 'flex', color: 'text.secondary', cursor: 'grab', touchAction: 'none' }}
             >
                 <DragIndicatorIcon fontSize="small" />
@@ -452,7 +452,7 @@ function PlanItemRow({
                 <QuantityInput
                     value={quantity}
                     unit={item.foods.unit}
-                    label={`Amount of ${item.foods.name}`}
+                    label={m.nutrition.amountOf(item.foods.name)}
                     autoFocus={autoFocus}
                     disabled={saving}
                     error={failed}
@@ -463,8 +463,8 @@ function PlanItemRow({
                 />
             )}
             {onAddInto ? (
-                <Tooltip title={`Put a food in ${item.foods.name}`}>
-                    <IconButton size="small" aria-label={`Put a food in ${item.foods.name}`} onClick={onAddInto}>
+                <Tooltip title={m.nutrition.putIn(item.foods.name)}>
+                    <IconButton size="small" aria-label={m.nutrition.putIn(item.foods.name)} onClick={onAddInto}>
                         <AddIntoIcon fontSize="small" />
                     </IconButton>
                 </Tooltip>
@@ -472,10 +472,10 @@ function PlanItemRow({
                 // Keeps the amounts lined up with the rows that have this button
                 <Box sx={{ width: 34, flexShrink: 0 }} />
             )}
-            <IconButton size="small" aria-label={`Edit ${item.foods.name}`} onClick={onEdit}>
+            <IconButton size="small" aria-label={m.nutrition.edit(item.foods.name)} onClick={onEdit}>
                 <EditIcon fontSize="small" />
             </IconButton>
-            <IconButton size="small" aria-label={`Remove ${item.foods.name}`} onClick={onRemove}>
+            <IconButton size="small" aria-label={m.nutrition.plan.remove(item.foods.name)} onClick={onRemove}>
                 <DeleteIcon fontSize="small" />
             </IconButton>
         </Box>
@@ -484,6 +484,7 @@ function PlanItemRow({
 
 // Rename, reorder, add and remove the meals of the day
 function MealsDialog({ meals, onClose, onChange }: { meals: MealRow[]; onClose: () => void; onChange: () => void }) {
+    const m = useT()
     const [names, setNames] = useState<Record<string, string>>(() => Object.fromEntries(meals.map((m) => [m.id, m.name])))
     const [newName, setNewName] = useState('')
     const [busy, setBusy] = useState(false)
@@ -501,14 +502,14 @@ function MealsDialog({ meals, onClose, onChange }: { meals: MealRow[]; onClose: 
     function rename(meal: MealRow) {
         const name = names[meal.id]?.trim()
         if (!name || name === meal.name) return
-        run(async () => !!(await updateMeal(meal.id, { name })), 'Failed to rename meal')
+        run(async () => !!(await updateMeal(meal.id, { name })), m.nutrition.plan.failedToRenameMeal)
     }
 
     function move(index: number, by: number) {
         const ids = meals.map((m) => m.id)
         const [moved] = ids.splice(index, 1)
         ids.splice(index + by, 0, moved)
-        run(() => reorderMeals(ids), 'Failed to reorder meals')
+        run(() => reorderMeals(ids), m.nutrition.plan.failedToReorderMeals)
     }
 
     function add(e: React.FormEvent) {
@@ -519,12 +520,12 @@ function MealsDialog({ meals, onClose, onChange }: { meals: MealRow[]; onClose: 
             const meal = await createMeal({ name, order: meals.length })
             if (meal) setNewName('')
             return !!meal
-        }, 'Failed to add meal')
+        }, m.nutrition.plan.failedToAddMeal)
     }
 
     return (
         <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-            <DialogTitle>Meals</DialogTitle>
+            <DialogTitle>{m.nutrition.plan.meals}</DialogTitle>
             <DialogContent>
                 <Stack spacing={1} sx={{ mt: 1 }}>
                     {meals.map((meal, i) => (
@@ -535,22 +536,22 @@ function MealsDialog({ meals, onClose, onChange }: { meals: MealRow[]; onClose: 
                                 onChange={(e) => setNames((prev) => ({ ...prev, [meal.id]: e.target.value }))}
                                 onBlur={() => rename(meal)}
                                 onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-                                inputProps={{ 'aria-label': 'Meal name' }}
+                                inputProps={{ 'aria-label': m.nutrition.plan.mealName }}
                                 sx={{ flex: 1 }}
                             />
-                            <IconButton size="small" aria-label={`Move ${meal.name} up`} disabled={busy || i === 0} onClick={() => move(i, -1)}>
+                            <IconButton size="small" aria-label={m.nutrition.plan.moveUp(meal.name)} disabled={busy || i === 0} onClick={() => move(i, -1)}>
                                 <ArrowUpIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" aria-label={`Move ${meal.name} down`} disabled={busy || i === meals.length - 1} onClick={() => move(i, 1)}>
+                            <IconButton size="small" aria-label={m.nutrition.plan.moveDown(meal.name)} disabled={busy || i === meals.length - 1} onClick={() => move(i, 1)}>
                                 <ArrowDownIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                                 size="small"
-                                aria-label={`Delete ${meal.name}`}
+                                aria-label={m.nutrition.plan.deleteMeal(meal.name)}
                                 disabled={busy}
                                 onClick={() => {
-                                    if (window.confirm(`Delete "${meal.name}"? Its foods are taken out of the plan on every day.`)) {
-                                        run(async () => !!(await deleteMeal(meal.id)), 'Failed to delete meal')
+                                    if (window.confirm(m.nutrition.plan.deleteMealConfirm(meal.name))) {
+                                        run(async () => !!(await deleteMeal(meal.id)), m.nutrition.plan.failedToDeleteMeal)
                                     }
                                 }}
                             >
@@ -562,17 +563,17 @@ function MealsDialog({ meals, onClose, onChange }: { meals: MealRow[]; onClose: 
                 <Box component="form" onSubmit={add} sx={{ display: 'flex', gap: 1, mt: 2 }}>
                     <TextField
                         size="small"
-                        label="New meal"
+                        label={m.nutrition.plan.newMeal}
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         sx={{ flex: 1 }}
                     />
-                    <Button type="submit" startIcon={<AddIcon />} disabled={busy || !newName.trim()}>Add</Button>
+                    <Button type="submit" startIcon={<AddIcon />} disabled={busy || !newName.trim()}>{m.common.add}</Button>
                 </Box>
                 {error && <Typography color="error" sx={{ mt: 2 }}>{error}</Typography>}
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose}>Done</Button>
+                <Button onClick={onClose}>{m.common.done}</Button>
             </DialogActions>
         </Dialog>
     )
