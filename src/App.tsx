@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import { supabase } from './lib/supabase'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { lastPage, rememberPage } from './lib/lastPlace'
 import Login from './pages/Login'
 import Training from './pages/Training'
 import Nutrition from './pages/Nutrition'
 import Profile from './pages/Profile'
 import Header from './components/Header'
 import { CssBaseline, Container } from '@mui/material'
+
+// Keeps track of the page being shown, so the app opens there next time
+function RememberPage() {
+  const { pathname, search } = useLocation()
+  useEffect(() => {
+    rememberPage(pathname, search)
+  }, [pathname, search])
+  return null
+}
 
 function App() {
   const [user, setUser] = useState<any | null>(null)
@@ -41,12 +51,14 @@ function App() {
     <>
       <CssBaseline />
       <BrowserRouter>
+        <RememberPage />
         <Header user={user} onSignOut={handleSignOut} />
         <Container maxWidth="lg" sx={{ mt: 3 }}>
           <Routes>
             <Route
               path="/"
-              element={user ? <Navigate to="/training" replace /> : <Login onSuccess={setUser} />}
+              // Signed in, the app opens where it was left, or on training the first time
+              element={user ? <Navigate to={lastPage() ?? '/training'} replace /> : <Login onSuccess={setUser} />}
             />
             <Route
               path="/training"
