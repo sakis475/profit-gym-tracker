@@ -12,6 +12,8 @@ import {
     MenuItem,
     Paper,
     Stack,
+    Tab,
+    Tabs,
     TextField,
     Tooltip,
     Typography,
@@ -59,8 +61,11 @@ import {
     type NutrientKey,
 } from '../../lib/nutrition'
 import { normalizeSearch } from '../../lib/workoutStats'
+import { lastTab, rememberTab } from '../../lib/lastPlace'
+import { libraryNote, type PublicFood } from '../../services/foodLibrary'
 import type { FoodRow } from '../../types/entityTypes'
 import FoodEntryDialog from './FoodEntryDialog'
+import PublicLibrary from './PublicLibrary'
 import {
     ContentsList,
     MadeOfNames,
@@ -84,6 +89,10 @@ type Props = {
 
 type FoodForm = { name: string; unit: string; notes: string } & Record<NutrientKey, string>
 
+type FoodsTab = 'mine' | 'library'
+// Where the open tab is remembered, beside the pages' own
+const TAB_KEY = '/nutrition#foods'
+
 // A food in the dialog's "Made of" list: already saved (`id`) or added in the dialog, its amount as typed
 type DraftContent = { key: string; id?: string; food: FoodRow; quantity: string }
 
@@ -103,6 +112,8 @@ function toForm(food: FoodRow): FoodForm {
 }
 
 export default function FoodsList({ foods, contents, onChange }: Props) {
+    // Your foods, or the public library to add from; opens on the one last used
+    const [tab, setTab] = useState<FoodsTab>(() => (lastTab(TAB_KEY) === 'library' ? 'library' : 'mine'))
     const [search, setSearch] = useState('')
     const [form, setForm] = useState<FoodForm | null>(null)
     const [editing, setEditing] = useState<FoodRow | null>(null)
@@ -140,9 +151,10 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
         return map
     }, [contents, foods])
 
-    function openForm(food?: FoodRow) {
+    // `prefill` starts a new food from given values, e.g. a product from the public library
+    function openForm(food?: FoodRow, prefill?: FoodForm) {
         setEditing(food ?? null)
-        setForm(food ? toForm(food) : EMPTY_FORM)
+        setForm(food ? toForm(food) : prefill ?? EMPTY_FORM)
         setMadeOf((food ? contents.get(food.id) ?? [] : []).map((c) => ({
             key: c.id,
             id: c.id,
@@ -256,6 +268,27 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
         return ok
     }
 
+    function chooseTab(next: FoodsTab) {
+        setTab(next)
+        rememberTab(TAB_KEY, next)
+    }
+
+    // A product from the library opens the add food form with its values, to check before saving.
+    // Values the label lacks are left empty, which saves as 0.
+    function addFromLibrary(food: PublicFood) {
+        const value = (n: number | null) => (n === null ? '' : String(Math.round(n * 10) / 10))
+        openForm(undefined, {
+            name: food.name,
+            unit: food.unit,
+            notes: libraryNote(food),
+            kcal: value(food.nutrients.kcal),
+            protein: value(food.nutrients.protein),
+            carbs: value(food.nutrients.carbs),
+            fat: value(food.nutrients.fat),
+            fiber: value(food.nutrients.fiber),
+        })
+    }
+
     return (
         <DndContext
             sensors={sensors}
@@ -264,70 +297,79 @@ export default function FoodsList({ foods, contents, onChange }: Props) {
             onDragEnd={handleDragEnd}
             onDragCancel={() => setDragging(null)}
         >
-            <WithFoodSidebar foods={foods} contents={contents} title="Foods: drag onto a food to put it in">
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-                    <TextField
-                        size="small"
-                        placeholder="Search foods"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        sx={{ flex: '1 1 220px' }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon fontSize="small" />
-                                </InputAdornment>
-                            ),
-                        }}
-                    />
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => openForm()}>
-                        Add food
-                    </Button>
-                </Box>
-                {listError && <Typography color="error" sx={{ mt: 2 }}>{listError}</Typography>}
+            <Tabs value={tab} onChange={(_, value: FoodsTab) => chooseTab(value)} sx={{ mb: 2, minHeight: 40 }}>
+                <Tab value="mine" label="My foods" sx={{ minHeight: 40 }} />
+                <Tab value="library" label="Public library" sx={{ minHeight: 40 }} />
+            </Tabs>
 
-                <Stack spacing={1} sx={{ mt: 2 }}>
-                    {shown.map((food) => {
-                        const inside = contents.get(food.id) ?? []
-                        return (
-                            <FoodCard
-                                key={food.id}
-                                food={food}
-                                madeOf={inside.length > 0 ? {
-                                    nutrients: contentsNutrients(inside),
-                                    names: inside.map((c) => c.food.name),
-                                    open: openContents.isOpen(food.id),
-                                    onToggle: () => openContents.toggle(food.id),
-                                } : undefined}
-                                // A food that goes in another takes nothing in
-                                canTakeIn={!parentOf.has(food.id)}
-                                onPutIn={() => { setListError(null); setPuttingIn(food) }}
-                                onEdit={() => openForm(food)}
-                                onDelete={() => { setError(null); setDeleting(food) }}
-                            >
-                                {inside.length > 0 && (
-                                    <ContentsList open={openContents.isOpen(food.id)}>
-                                        {inside.map((c) => (
-                                            <ContentRow
-                                                // Keyed on the amount too, so a saved change resets the field
-                                                key={`${c.id}:${c.quantity}`}
-                                                content={c}
-                                                autoFocus={c.id === focusId}
-                                                onBlurred={() => setFocusId(null)}
-                                                onCommit={(quantity) => run(() => updateFoodContent(c.id, { quantity }), 'Failed to save')}
-                                                onRemove={() => run(() => deleteFoodContent(c.id), `Failed to take ${c.food.name} out`)}
-                                            />
-                                        ))}
-                                    </ContentsList>
-                                )}
-                            </FoodCard>
-                        )
-                    })}
-                    {shown.length === 0 && (
-                        <Typography sx={{ mt: 2 }}>{foods.length === 0 ? 'No foods yet.' : 'No foods match your search.'}</Typography>
-                    )}
-                </Stack>
-            </WithFoodSidebar>
+            {tab === 'library' ? (
+                <PublicLibrary myFoods={foods} onAdd={addFromLibrary} />
+            ) : (
+                <WithFoodSidebar foods={foods} contents={contents} title="Foods: drag onto a food to put it in">
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                        <TextField
+                            size="small"
+                            placeholder="Search foods"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            sx={{ flex: '1 1 220px' }}
+                            InputProps={{
+                                startAdornment: (
+                                    <InputAdornment position="start">
+                                        <SearchIcon fontSize="small" />
+                                    </InputAdornment>
+                                ),
+                            }}
+                        />
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openForm()}>
+                            Add food
+                        </Button>
+                    </Box>
+                    {listError && <Typography color="error" sx={{ mt: 2 }}>{listError}</Typography>}
+    
+                    <Stack spacing={1} sx={{ mt: 2 }}>
+                        {shown.map((food) => {
+                            const inside = contents.get(food.id) ?? []
+                            return (
+                                <FoodCard
+                                    key={food.id}
+                                    food={food}
+                                    madeOf={inside.length > 0 ? {
+                                        nutrients: contentsNutrients(inside),
+                                        names: inside.map((c) => c.food.name),
+                                        open: openContents.isOpen(food.id),
+                                        onToggle: () => openContents.toggle(food.id),
+                                    } : undefined}
+                                    // A food that goes in another takes nothing in
+                                    canTakeIn={!parentOf.has(food.id)}
+                                    onPutIn={() => { setListError(null); setPuttingIn(food) }}
+                                    onEdit={() => openForm(food)}
+                                    onDelete={() => { setError(null); setDeleting(food) }}
+                                >
+                                    {inside.length > 0 && (
+                                        <ContentsList open={openContents.isOpen(food.id)}>
+                                            {inside.map((c) => (
+                                                <ContentRow
+                                                    // Keyed on the amount too, so a saved change resets the field
+                                                    key={`${c.id}:${c.quantity}`}
+                                                    content={c}
+                                                    autoFocus={c.id === focusId}
+                                                    onBlurred={() => setFocusId(null)}
+                                                    onCommit={(quantity) => run(() => updateFoodContent(c.id, { quantity }), 'Failed to save')}
+                                                    onRemove={() => run(() => deleteFoodContent(c.id), `Failed to take ${c.food.name} out`)}
+                                                />
+                                            ))}
+                                        </ContentsList>
+                                    )}
+                                </FoodCard>
+                            )
+                        })}
+                        {shown.length === 0 && (
+                            <Typography sx={{ mt: 2 }}>{foods.length === 0 ? 'No foods yet.' : 'No foods match your search.'}</Typography>
+                        )}
+                    </Stack>
+                </WithFoodSidebar>
+            )}
 
             <DragOverlay dropAnimation={null}>
                 {dragging && <DragPreview name={dragging.food.name} />}
