@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Box, Collapse, Divider, IconButton, LinearProgress, Paper, Tooltip, Typography } from '@mui/material'
 import { ExpandLess as ExpandLessIcon, ExpandMore as ExpandMoreIcon } from '@mui/icons-material'
-import { NUTRIENTS, formatNutrient, sumNutrients, type Nutrients } from '../../lib/nutrition'
+import { NUTRIENTS, formatNutrient, sumNutrients, type NutrientKey, type Nutrients } from '../../lib/nutrition'
 import type { NutritionGoalsRow } from '../../types/entityTypes'
 
 // One food of the day, with what it brings. Several with the same key (the same food in two
@@ -37,6 +37,23 @@ function readOpen() {
     } catch {
         return true
     }
+}
+
+// How far off the goal still counts as on target (green), and as near it (orange). Past that it is red.
+const ON_TARGET = 0.1
+const NEAR = 0.25
+
+// Protein and fiber are minimums: going over is fine. The rest are targets: off in either
+// direction counts.
+const MINIMUMS: readonly NutrientKey[] = ['protein', 'fiber']
+
+type GoalStatus = 'success' | 'warning' | 'error'
+
+function goalStatus(key: NutrientKey, value: number, goal: number): GoalStatus {
+    const off = MINIMUMS.includes(key)
+        ? Math.max(0, (goal - value) / goal)
+        : Math.abs(value - goal) / goal
+    return off <= ON_TARGET ? 'success' : off <= NEAR ? 'warning' : 'error'
 }
 
 // A day's totals against the goals, one tile per nutrient
@@ -76,6 +93,7 @@ export default function NutrientTotals({ totals, goals, sources }: Props) {
                 const value = totals[key]
                 const goal = goals?.[key] ?? null
                 const diff = goal !== null ? goal - value : null
+                const status = goal !== null && goal > 0 ? goalStatus(key, value, goal) : null
                 // Foods that bring none of this nutrient are left out
                 const ranked = merged
                     .filter((s) => s.nutrients[key] > 0)
@@ -90,15 +108,19 @@ export default function NutrientTotals({ totals, goals, sources }: Props) {
                                 {goal !== null ? ` / ${formatNutrient(goal, key)} ${unit}` : ` ${unit}`}
                             </Typography>
                         </Typography>
-                        {goal !== null && goal > 0 && (
+                        {goal !== null && status && (
                             <LinearProgress
                                 variant="determinate"
+                                color={status}
                                 value={Math.min(100, (value / goal) * 100)}
                                 aria-label={`${label} against goal`}
                                 sx={{ my: 0.75, height: 6, borderRadius: 3 }}
                             />
                         )}
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                            variant="caption"
+                            color={status && status !== 'success' ? `${status}.main` : 'text.secondary'}
+                        >
                             {diff === null
                                 ? 'No goal'
                                 : diff >= 0
